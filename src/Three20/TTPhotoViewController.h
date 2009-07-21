@@ -22,6 +22,8 @@
   NSTimer* _slideshowTimer;
   NSTimer* _loadTimer;
   BOOL _delayLoad;
+  BOOL _hideBarsTimerRunning;
+  BOOL _autoHideBars;
 }
 
 /**
@@ -48,6 +50,11 @@
  * The default image to show before a photo has been loaded.
  */
 @property(nonatomic,retain) UIImage* defaultImage;
+
+/**
+ * Auto hide bars after delay without user interaction.
+ */
+@property(nonatomic,assign) BOOL autoHideBars;
 
 /**
  * Creates a photo view for a new page.

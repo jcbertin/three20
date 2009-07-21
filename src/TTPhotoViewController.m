@@ -9,6 +9,8 @@
 
 static const NSTimeInterval kPhotoLoadLongDelay = 0.5;
 static const NSTimeInterval kPhotoLoadShortDelay = 0.25;
+static const NSTimeInterval kPhotoHideBarsDelay = 5.0;
+
 static const NSTimeInterval kSlideshowInterval = 2;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -16,13 +18,85 @@ static const NSTimeInterval kSlideshowInterval = 2;
 @implementation TTPhotoViewController
 
 @synthesize photoSource = _photoSource, centerPhoto = _centerPhoto,
-  centerPhotoIndex = _centerPhotoIndex, defaultImage = _defaultImage;
+  centerPhotoIndex = _centerPhotoIndex, defaultImage = _defaultImage,
+  autoHideBars = _autoHideBars;
+
+- (id)init {
+  if (self = [super init]) {
+    _photoSource = nil;
+    _centerPhoto = nil;
+    _centerPhotoIndex = 0;
+    _scrollView = nil;
+    _photoStatusView = nil;
+    _toolbar = nil;
+    _nextButton = nil;
+    _previousButton = nil;
+    _statusText = nil;
+    _thumbsController = nil;
+    _slideshowTimer = nil;
+    _loadTimer = nil;
+    _delayLoad = NO;
+    _hideBarsTimerRunning = NO;
+    _autoHideBars = NO;
+    self.defaultImage = TTIMAGE(@"bundle://Three20.bundle/images/photoDefault.png");
+    
+    self.hidesBottomBarWhenPushed = YES;
+    self.navigationItem.backBarButtonItem = [[[UIBarButtonItem alloc] initWithTitle:
+      TTLocalizedString(@"Photo", @"Title for back button that returns to photo browser")
+      style:UIBarButtonItemStylePlain target:nil action:nil] autorelease];
+    self.navigationBarStyle = UIBarStyleBlackTranslucent;
+    self.navigationBarTintColor = nil;
+    self.statusBarStyle = UIStatusBarStyleBlackTranslucent;
+    
+    if ([self respondsToSelector:@selector(setWantsFullScreenLayout:)]) {
+      [self setWantsFullScreenLayout:YES];
+    }
+  }
+  return self;
+}
+
+- (void)dealloc {
+  _thumbsController.delegate = nil;
+  TT_RELEASE_MEMBER(_thumbsController);
+  [_slideshowTimer invalidate];
+  _slideshowTimer = nil;
+  [_loadTimer invalidate];
+  _loadTimer = nil;
+  TT_RELEASE_MEMBER(_centerPhoto);
+  [_photoSource.delegates removeObject:self];
+  TT_RELEASE_MEMBER(_photoSource);
+  TT_RELEASE_MEMBER(_statusText);
+  TT_RELEASE_MEMBER(_defaultImage);
+  [super dealloc];
+}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // private
 
 - (TTPhotoView*)centerPhotoView {
   return (TTPhotoView*)_scrollView.centerPage;
+}
+
+- (void)hideBars {
+  if (_autoHideBars)
+    [self showBars:NO animated:YES];
+}
+
+- (void)startHideBarsTimer:(NSTimeInterval)delay {
+  if (_hideBarsTimerRunning) {
+    _hideBarsTimerRunning = NO;
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(hideBars) object:nil];
+  }
+  
+  _hideBarsTimerRunning = YES;
+  [self performSelector:@selector(hideBars) withObject:nil afterDelay:delay];
+}
+
+- (void)cancelHideBarsTimer {
+  if (_hideBarsTimerRunning) {
+    _hideBarsTimerRunning = NO;
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(hideBars) object:nil];
+  }
 }
 
 - (void)loadImageDelayed {
@@ -200,6 +274,8 @@ static const NSTimeInterval kSlideshowInterval = 2;
     }
   }
     
+  [self cancelHideBarsTimer];
+	
   if (URL) {
     TTOpenURL(URL);
   } else {
@@ -247,6 +323,7 @@ static const NSTimeInterval kSlideshowInterval = 2;
   if (_centerPhotoIndex < _photoSource.numberOfPhotos-1) {
     _scrollView.centerPageIndex = _centerPhotoIndex+1;
   }
+  [self startHideBarsTimer:kPhotoHideBarsDelay];
 }
 
 - (void)previousAction {
@@ -254,14 +331,15 @@ static const NSTimeInterval kSlideshowInterval = 2;
   if (_centerPhotoIndex > 0) {
     _scrollView.centerPageIndex = _centerPhotoIndex-1;
   }
+  [self startHideBarsTimer:kPhotoHideBarsDelay];
 }
 
 - (void)showBarsAnimationDidStop {
-  self.navigationController.navigationBarHidden = NO;
+  [self.navigationController setNavigationBarHidden:NO animated:NO];
 }
 
 - (void)hideBarsAnimationDidStop {
-  self.navigationController.navigationBarHidden = YES;
+  [self.navigationController setNavigationBarHidden:YES animated:NO];
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -365,9 +443,16 @@ static const NSTimeInterval kSlideshowInterval = 2;
   TT_RELEASE_SAFELY(_toolbar);
 }
 
+- (void)viewDidAppear:(BOOL)animated {
+  [super viewDidAppear:animated];
+  
+  [self startHideBarsTimer:kPhotoHideBarsDelay];
+}
+
 - (void)viewWillDisappear:(BOOL)animated {
   [super viewWillDisappear:animated];
 
+  [self cancelHideBarsTimer];
   [self pauseAction];
   if (self.nextViewController) {
     [self showBars:YES animated:NO];
@@ -383,14 +468,15 @@ static const NSTimeInterval kSlideshowInterval = 2;
   CGFloat alpha = show ? 1 : 0;
   if (alpha == _toolbar.alpha)
     return;
+
+  if (show)
+    [self showBarsAnimationDidStop];
   
   if (animated) {
     [UIView beginAnimations:nil context:nil];
     [UIView setAnimationDuration:TT_TRANSITION_DURATION];
-    [UIView setAnimationDelegate:self];
-    if (show) {
-      [UIView setAnimationDidStopSelector:@selector(showBarsAnimationDidStop)];
-    } else {
+    if (!show) {
+      [UIView setAnimationDelegate:self];
       [UIView setAnimationDidStopSelector:@selector(hideBarsAnimationDidStop)];
     }
   } else {
@@ -408,6 +494,14 @@ static const NSTimeInterval kSlideshowInterval = 2;
   if (animated) {
     [UIView commitAnimations];
   }
+  
+  if (show) {
+    if (self.nextViewController == nil)
+      [self startHideBarsTimer:kPhotoHideBarsDelay];
+    else
+      [self cancelHideBarsTimer];
+  } else
+    [self cancelHideBarsTimer];
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -526,10 +620,12 @@ static const NSTimeInterval kSlideshowInterval = 2;
 }
 
 - (void)scrollView:(TTScrollView*)scrollView tapped:(UITouch*)touch {
+  [self cancelHideBarsTimer];
+
   if ([self isShowingChrome]) {
     [self showBars:NO animated:YES];
   } else {
-    [self showBars:YES animated:NO];
+    [self showBars:YES animated:YES];
   }
 }
 

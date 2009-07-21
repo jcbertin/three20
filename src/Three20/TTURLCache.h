@@ -8,6 +8,7 @@
   NSMutableArray* _imageSortedList;
   NSUInteger _totalPixelCount;
   NSUInteger _maxPixelCount;
+  NSUInteger _fileReadOptions;
   NSInteger _totalLoading;
   NSTimeInterval _invalidationAge;
   BOOL _disableDiskCache;
@@ -41,6 +42,13 @@
  * The amount of time to set back the modification timestamp on files when invalidating them.
  */
 @property(nonatomic) NSTimeInterval invalidationAge;
+
+/**
+ * Options for data files reading.
+ *
+ * See "Options for NSData Reading Methods" in documention. Default is zero.
+ */
+@property(nonatomic) NSUInteger fileReadOptions;
 
 /**
  * Gets the shared cache singleton used across the application.

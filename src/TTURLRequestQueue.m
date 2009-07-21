@@ -317,7 +317,9 @@ static TTURLRequestQueue* gMainQueue = nil;
   NSString* path = TTPathForBundleResource([URL substringFromIndex:9]);
   NSFileManager* fm = [NSFileManager defaultManager];
   if ([fm fileExistsAtPath:path]) {
-    return [NSData dataWithContentsOfFile:path];
+    // Bundles shouldn't change during NSData object existence.
+    // So we could safely use mapped version here.
+    return [NSData dataWithContentsOfMappedFile:path];
   } else if (error) {
     *error = [NSError errorWithDomain:NSCocoaErrorDomain
                       code:NSFileReadNoSuchFileError userInfo:nil];
@@ -329,7 +331,7 @@ static TTURLRequestQueue* gMainQueue = nil;
   NSString* path = TTPathForDocumentsResource([URL substringFromIndex:12]);
   NSFileManager* fm = [NSFileManager defaultManager];
   if ([fm fileExistsAtPath:path]) {
-    return [NSData dataWithContentsOfFile:path];
+    return [NSData dataWithContentsOfFile:path options:[[TTURLCache sharedCache] fileReadOptions] error:nil];
   } else if (error) {
     *error = [NSError errorWithDomain:NSCocoaErrorDomain
                       code:NSFileReadNoSuchFileError userInfo:nil];

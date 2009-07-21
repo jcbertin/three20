@@ -15,7 +15,8 @@ static TTURLCache* gSharedCache = nil;
 @implementation TTURLCache
 
 @synthesize disableDiskCache = _disableDiskCache, disableImageCache = _disableImageCache,
-  cachePath = _cachePath, maxPixelCount = _maxPixelCount, invalidationAge = _invalidationAge;
+  cachePath = _cachePath, maxPixelCount = _maxPixelCount, invalidationAge = _invalidationAge,
+  fileReadOptions = _fileReadOptions;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 // class public
@@ -91,13 +92,15 @@ static TTURLCache* gSharedCache = nil;
 
 - (UIImage*)loadImageFromBundle:(NSString*)URL {
   NSString* path = TTPathForBundleResource([URL substringFromIndex:9]);
-  NSData* data = [NSData dataWithContentsOfFile:path];
+  // Bundles shouldn't change during NSData object existence.
+  // So we could safely use mapped version here.
+  NSData* data = [NSData dataWithContentsOfMappedFile:path];
   return [UIImage imageWithData:data];
 }
 
 - (UIImage*)loadImageFromDocuments:(NSString*)URL {
   NSString* path = TTPathForDocumentsResource([URL substringFromIndex:12]);
-  NSData* data = [NSData dataWithContentsOfFile:path];
+  NSData* data = [NSData dataWithContentsOfFile:path options:_fileReadOptions error:nil];
   return [UIImage imageWithData:data];
 }
 
@@ -120,6 +123,7 @@ static TTURLCache* gSharedCache = nil;
     _invalidationAge = TT_DEFAULT_CACHE_INVALIDATION_AGE;
     _maxPixelCount = 0;
     _totalPixelCount = 0;
+    _fileReadOptions = 0;
     
     // XXXjoe Disabling the built-in cache may save memory but it also makes UIWebView slow
     // NSURLCache* sharedCache = [[NSURLCache alloc] initWithMemoryCapacity:0 diskCapacity:0
@@ -207,7 +211,7 @@ static TTURLCache* gSharedCache = nil;
       *timestamp = modified;
     }
 
-    return [NSData dataWithContentsOfFile:filePath];
+    return [NSData dataWithContentsOfFile:filePath options:_fileReadOptions error:nil];
   }
 
   return nil;

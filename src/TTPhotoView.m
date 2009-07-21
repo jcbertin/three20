@@ -126,11 +126,12 @@ static const CGFloat kMaxCaptionHeight = 100;
 
 - (void)layoutSubviews {
   CGRect screenBounds = TTScreenBounds();
+  CGFloat width = self.orientationWidth;
   CGFloat height = self.orientationHeight;
-  CGFloat cx = self.bounds.origin.x + self.orientationWidth/2;
-  CGFloat cy = self.bounds.origin.y + self.orientationHeight/2;
+  CGFloat cx = self.bounds.origin.x + width/2;
+  CGFloat cy = self.bounds.origin.y + height/2;
 
-  BOOL landscape = self.width == self.orientationWidth;
+  BOOL landscape = self.width == width;
   CGFloat marginBottom = landscape ? TT_ROW_HEIGHT : 0;
   
   // Since the photo view is constrained to the size of the image, but we want to position

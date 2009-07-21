@@ -21,55 +21,6 @@ static const NSTimeInterval kSlideshowInterval = 2;
   centerPhotoIndex = _centerPhotoIndex, defaultImage = _defaultImage,
   autoHideBars = _autoHideBars;
 
-- (id)init {
-  if (self = [super init]) {
-    _photoSource = nil;
-    _centerPhoto = nil;
-    _centerPhotoIndex = 0;
-    _scrollView = nil;
-    _photoStatusView = nil;
-    _toolbar = nil;
-    _nextButton = nil;
-    _previousButton = nil;
-    _statusText = nil;
-    _thumbsController = nil;
-    _slideshowTimer = nil;
-    _loadTimer = nil;
-    _delayLoad = NO;
-    _hideBarsTimerRunning = NO;
-    _autoHideBars = NO;
-    self.defaultImage = TTIMAGE(@"bundle://Three20.bundle/images/photoDefault.png");
-    
-    self.hidesBottomBarWhenPushed = YES;
-    self.navigationItem.backBarButtonItem = [[[UIBarButtonItem alloc] initWithTitle:
-      TTLocalizedString(@"Photo", @"Title for back button that returns to photo browser")
-      style:UIBarButtonItemStylePlain target:nil action:nil] autorelease];
-    self.navigationBarStyle = UIBarStyleBlackTranslucent;
-    self.navigationBarTintColor = nil;
-    self.statusBarStyle = UIStatusBarStyleBlackTranslucent;
-    
-    if ([self respondsToSelector:@selector(setWantsFullScreenLayout:)]) {
-      [self setWantsFullScreenLayout:YES];
-    }
-  }
-  return self;
-}
-
-- (void)dealloc {
-  _thumbsController.delegate = nil;
-  TT_RELEASE_MEMBER(_thumbsController);
-  [_slideshowTimer invalidate];
-  _slideshowTimer = nil;
-  [_loadTimer invalidate];
-  _loadTimer = nil;
-  TT_RELEASE_MEMBER(_centerPhoto);
-  [_photoSource.delegates removeObject:self];
-  TT_RELEASE_MEMBER(_photoSource);
-  TT_RELEASE_MEMBER(_statusText);
-  TT_RELEASE_MEMBER(_defaultImage);
-  [super dealloc];
-}
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // private
 
@@ -83,10 +34,8 @@ static const NSTimeInterval kSlideshowInterval = 2;
 }
 
 - (void)startHideBarsTimer:(NSTimeInterval)delay {
-  if (_hideBarsTimerRunning) {
-    _hideBarsTimerRunning = NO;
+  if (_hideBarsTimerRunning)
     [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(hideBars) object:nil];
-  }
   
   _hideBarsTimerRunning = YES;
   [self performSelector:@selector(hideBars) withObject:nil afterDelay:delay];
@@ -273,9 +222,9 @@ static const NSTimeInterval kSlideshowInterval = 2;
       _thumbsController.photoSource = _photoSource;
     }
   }
-    
+  
   [self cancelHideBarsTimer];
-	
+  
   if (URL) {
     TTOpenURL(URL);
   } else {
@@ -360,6 +309,8 @@ static const NSTimeInterval kSlideshowInterval = 2;
     _slideshowTimer = nil;
     _loadTimer = nil;
     _delayLoad = NO;
+    _hideBarsTimerRunning = NO;
+    _autoHideBars = NO;
     self.defaultImage = TTIMAGE(@"bundle://Three20.bundle/images/photoDefault.png");
     
     self.hidesBottomBarWhenPushed = YES;

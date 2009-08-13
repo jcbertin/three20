@@ -2,6 +2,7 @@
 #import "Three20/TTURLCache.h"
 #import "Three20/TTURLRequest.h"
 #import "Three20/TTPhotoView.h"
+#import "Three20/TTActivityLabel.h"
 #import "Three20/TTNavigator.h"
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -12,14 +13,19 @@ static const NSTimeInterval kPhotoLoadShortDelay = 0.25;
 static const NSTimeInterval kPhotoHideBarsDelay = 5.0;
 
 static const NSTimeInterval kSlideshowInterval = 2;
+static const NSInteger kActivityLabelTag = 96;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 @implementation TTPhotoViewController
 
 @synthesize photoSource = _photoSource, centerPhoto = _centerPhoto,
+<<<<<<< HEAD:src/TTPhotoViewController.m
   centerPhotoIndex = _centerPhotoIndex, defaultImage = _defaultImage,
   autoHideBars = _autoHideBars;
+=======
+  centerPhotoIndex = _centerPhotoIndex, defaultImage = _defaultImage, captionStyle = _captionStyle;
+>>>>>>> joehewitt/master:src/TTPhotoViewController.m
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // private
@@ -66,7 +72,7 @@ static const NSTimeInterval kSlideshowInterval = 2;
 
 - (void)loadImages {
   TTPhotoView* centerPhotoView = self.centerPhotoView;
-  for (TTPhotoView* photoView in [_scrollView.visiblePages objectEnumerator]) {
+  for (TTPhotoView* photoView in _scrollView.visiblePages.objectEnumerator) {
     if (photoView == centerPhotoView) {
       [photoView loadPreview:NO];
     } else {
@@ -82,18 +88,14 @@ static const NSTimeInterval kSlideshowInterval = 2;
   }
 }
 
-- (void)updateTitle {
-  if (!_photoSource.numberOfPhotos || _photoSource.numberOfPhotos == NSIntegerMax) {
+- (void)updateChrome {
+  if (_photoSource.numberOfPhotos < 2) {
     self.title = _photoSource.title;
   } else {
     self.title = [NSString stringWithFormat:
       TTLocalizedString(@"%d of %d", @"Current page in photo browser (1 of 10)"),
       _centerPhotoIndex+1, _photoSource.numberOfPhotos];
   }
-}
-
-- (void)updateChrome {
-  [self updateTitle];
 
   if (![self.previousViewController isKindOfClass:[TTThumbsViewController class]]) {
     if (_photoSource.numberOfPhotos > 1) {
@@ -110,18 +112,24 @@ static const NSTimeInterval kSlideshowInterval = 2;
   UIBarButtonItem* playButton = [_toolbar itemWithTag:1];
   playButton.enabled = _photoSource.numberOfPhotos > 1;
   _previousButton.enabled = _centerPhotoIndex > 0;
-  _nextButton.enabled = _centerPhotoIndex < _photoSource.numberOfPhotos-1;
+  _nextButton.enabled = _centerPhotoIndex >= 0 && _centerPhotoIndex < _photoSource.numberOfPhotos-1;
 }
 
 - (void)updatePhotoView {
   _scrollView.centerPageIndex = _centerPhotoIndex;
   [self loadImages];
+  [self updateChrome];
+}
+
+- (void)moveToPhoto:(id<TTPhoto>)photo {
+  id<TTPhoto> previousPhoto = [_centerPhoto autorelease];
+  _centerPhoto = [photo retain];
+  [self didMoveToPhoto:_centerPhoto fromPhoto:previousPhoto];
 }
 
 - (void)moveToPhotoAtIndex:(NSInteger)photoIndex withDelay:(BOOL)withDelay {
   _centerPhotoIndex = photoIndex == TT_NULL_PHOTO_INDEX ? 0 : photoIndex;
-  [_centerPhoto release];
-  _centerPhoto = [[_photoSource photoAtIndex:_centerPhotoIndex] retain];
+  [self moveToPhoto:[_photoSource photoAtIndex:_centerPhotoIndex]];
   _delayLoad = withDelay;
 }
 
@@ -133,8 +141,7 @@ static const NSTimeInterval kSlideshowInterval = 2;
 }
 
 - (void)updateVisiblePhotoViews {
-  [_centerPhoto release];
-  _centerPhoto = [[_photoSource photoAtIndex:_centerPhotoIndex] retain];
+  [self moveToPhoto:[_photoSource photoAtIndex:_centerPhotoIndex]];
 
   NSDictionary* photoViews = _scrollView.visiblePages;
   for (NSNumber* key in photoViews.keyEnumerator) {
@@ -148,8 +155,7 @@ static const NSTimeInterval kSlideshowInterval = 2;
 
 - (void)resetVisiblePhotoViews {
   NSDictionary* photoViews = _scrollView.visiblePages;
-  for (NSNumber* key in photoViews.keyEnumerator) {
-    TTPhotoView* photoView = [photoViews objectForKey:key];
+  for (TTPhotoView* photoView in photoViews.objectEnumerator) {
     if (!photoView.isLoading) {
       [photoView showProgress:-1];
     }
@@ -194,8 +200,8 @@ static const NSTimeInterval kSlideshowInterval = 2;
 }
 
 - (void)showCaptions:(BOOL)show {
-  for (TTPhotoView* photoView in [_scrollView.visiblePages objectEnumerator]) {
-    photoView.captionHidden = !show;
+  for (TTPhotoView* photoView in _scrollView.visiblePages.objectEnumerator) {
+    photoView.hidesCaption = !show;
   }
 }
 
@@ -294,6 +300,20 @@ static const NSTimeInterval kSlideshowInterval = 2;
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // NSObject
 
+- (id)initWithPhoto:(id<TTPhoto>)photo {
+  if (self = [self init]) {
+    self.centerPhoto = photo;
+  }
+  return self;
+}
+
+- (id)initWithPhotoSource:(id<TTPhotoSource>)photoSource {
+  if (self = [self init]) {
+    self.photoSource = photoSource;
+  }
+  return self;
+}
+
 - (id)init {
   if (self = [super init]) {
     _photoSource = nil;
@@ -302,6 +322,8 @@ static const NSTimeInterval kSlideshowInterval = 2;
     _scrollView = nil;
     _photoStatusView = nil;
     _toolbar = nil;
+    _defaultImage = nil;
+    _captionStyle = nil;
     _nextButton = nil;
     _previousButton = nil;
     _statusText = nil;
@@ -309,32 +331,37 @@ static const NSTimeInterval kSlideshowInterval = 2;
     _slideshowTimer = nil;
     _loadTimer = nil;
     _delayLoad = NO;
+<<<<<<< HEAD:src/TTPhotoViewController.m
     _hideBarsTimerRunning = NO;
     _autoHideBars = NO;
     self.defaultImage = TTIMAGE(@"bundle://Three20.bundle/images/photoDefault.png");
+=======
+>>>>>>> joehewitt/master:src/TTPhotoViewController.m
     
-    self.hidesBottomBarWhenPushed = YES;
     self.navigationItem.backBarButtonItem = [[[UIBarButtonItem alloc] initWithTitle:
       TTLocalizedString(@"Photo", @"Title for back button that returns to photo browser")
       style:UIBarButtonItemStylePlain target:nil action:nil] autorelease];
+
+    self.statusBarStyle = UIStatusBarStyleBlackTranslucent;
     self.navigationBarStyle = UIBarStyleBlackTranslucent;
     self.navigationBarTintColor = nil;
-    self.statusBarStyle = UIStatusBarStyleBlackTranslucent;
     self.wantsFullScreenLayout = YES;
+    self.hidesBottomBarWhenPushed = YES;
+
+    self.defaultImage = TTIMAGE(@"bundle://Three20.bundle/images/photoDefault.png");
   }
   return self;
 }
 
 - (void)dealloc {
   _thumbsController.delegate = nil;
+  TT_INVALIDATE_TIMER(_slideshowTimer);
+  TT_INVALIDATE_TIMER(_loadTimer);
   TT_RELEASE_SAFELY(_thumbsController);
-  [_slideshowTimer invalidate];
-  _slideshowTimer = nil;
-  [_loadTimer invalidate];
-  _loadTimer = nil;
   TT_RELEASE_SAFELY(_centerPhoto);
   TT_RELEASE_SAFELY(_photoSource);
   TT_RELEASE_SAFELY(_statusText);
+  TT_RELEASE_SAFELY(_captionStyle);
   TT_RELEASE_SAFELY(_defaultImage);
   [super dealloc];
 }
@@ -403,7 +430,11 @@ static const NSTimeInterval kSlideshowInterval = 2;
 - (void)viewWillDisappear:(BOOL)animated {
   [super viewWillDisappear:animated];
 
+<<<<<<< HEAD:src/TTPhotoViewController.m
   [self cancelHideBarsTimer];
+=======
+  [_scrollView cancelTouches];
+>>>>>>> joehewitt/master:src/TTPhotoViewController.m
   [self pauseAction];
   if (self.nextViewController) {
     [self showBars:YES animated:NO];
@@ -470,42 +501,55 @@ static const NSTimeInterval kSlideshowInterval = 2;
   return _photoSource.numberOfPhotos > 0;
 }
 
-- (void)willLoadModel {
-  [self updateChrome];
+- (void)didRefreshModel {
+  [super didRefreshModel];
+  [self updatePhotoView];
 }
 
-- (void)didLoadModel {
-  [self updatePhotoView];
+- (void)didLoadModel:(BOOL)firstTime {
+  [super didLoadModel:firstTime];
+  if (firstTime) {
+    [self updatePhotoView];
+  }
 }
 
 - (void)showLoading:(BOOL)show {
   [self showProgress:show ? 0 : -1];
 }
 
-- (void)showError:(BOOL)show {
-  if (show) {
-    [self showStatus:TTLocalizedString(@"This photo set could not be loaded.", @"")];
-  } else {
-    [self showStatus:nil];
-  }
-}
-
 - (void)showEmpty:(BOOL)show {
   if (show) {
+    [_scrollView reloadData];
     [self showStatus:TTLocalizedString(@"This photo set contains no photos.", @"")];
   } else {
     [self showStatus:nil];
   }
 }
 
+- (void)showError:(BOOL)show {
+  if (show) {
+    [self showStatus:TTDescriptionForError(_modelError)];
+  } else {
+    [self showStatus:nil];
+  }
+}
+
+- (void)moveToNextValidPhoto {
+  if (_centerPhotoIndex >= _photoSource.numberOfPhotos) {
+    // We were positioned at an index that is past the end, so move to the last photo
+    [self moveToPhotoAtIndex:_photoSource.numberOfPhotos - 1 withDelay:NO];
+  } else {
+    [self moveToPhotoAtIndex:_centerPhotoIndex withDelay:NO];
+  }
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-// TTPhotoSourceDelegate
+// TTModelDelegate
 
 - (void)modelDidFinishLoad:(id<TTModel>)model {
   if (model == _model) {
     if (_centerPhotoIndex >= _photoSource.numberOfPhotos) {
-      // We were positioned at an index that is past the end, so move to the last photo
-      [self moveToPhotoAtIndex:_photoSource.numberOfPhotos - 1 withDelay:NO];
+      [self moveToNextValidPhoto];
       [_scrollView reloadData];
       [self resetVisiblePhotoViews];
     } else {
@@ -527,6 +571,21 @@ static const NSTimeInterval kSlideshowInterval = 2;
     [self resetVisiblePhotoViews];
   }
   [super modelDidCancelLoad:model];
+}
+
+- (void)model:(id<TTModel>)model didUpdateObject:(id)object atIndexPath:(NSIndexPath*)indexPath {
+}
+
+- (void)model:(id<TTModel>)model didInsertObject:(id)object atIndexPath:(NSIndexPath*)indexPath {
+}
+
+- (void)model:(id<TTModel>)model didDeleteObject:(id)object atIndexPath:(NSIndexPath*)indexPath {
+  if (object == self.centerPhoto) {
+    [self showActivity:nil];
+    [self moveToNextValidPhoto];
+    [_scrollView reloadData];
+    [self refresh];
+  }
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -551,11 +610,11 @@ static const NSTimeInterval kSlideshowInterval = 2;
 
 - (void)scrollViewWillRotate:(TTScrollView*)scrollView
         toOrientation:(UIInterfaceOrientation)orientation {
-  self.centerPhotoView.extrasHidden = YES;
+  self.centerPhotoView.hidesExtras = YES;
 }
 
 - (void)scrollViewDidRotate:(TTScrollView*)scrollView {
-  self.centerPhotoView.extrasHidden = NO;
+  self.centerPhotoView.hidesExtras = NO;
 }
 
 - (BOOL)scrollViewShouldZoom:(TTScrollView*)scrollView {
@@ -563,11 +622,11 @@ static const NSTimeInterval kSlideshowInterval = 2;
 }
 
 - (void)scrollViewDidBeginZooming:(TTScrollView*)scrollView {
-  self.centerPhotoView.extrasHidden = YES;
+  self.centerPhotoView.hidesExtras = YES;
 }
 
 - (void)scrollViewDidEndZooming:(TTScrollView*)scrollView {
-  self.centerPhotoView.extrasHidden = NO;
+  self.centerPhotoView.hidesExtras = NO;
 }
 
 - (void)scrollView:(TTScrollView*)scrollView tapped:(UITouch*)touch {
@@ -591,8 +650,9 @@ static const NSTimeInterval kSlideshowInterval = 2;
   TTPhotoView* photoView = (TTPhotoView*)[_scrollView dequeueReusablePage];
   if (!photoView) {
     photoView = [self createPhotoView];
+    photoView.captionStyle = _captionStyle;
     photoView.defaultImage = _defaultImage;
-    photoView.captionHidden = _toolbar.alpha == 0;
+    photoView.hidesCaption = _toolbar.alpha == 0;
   }
 
   id<TTPhoto> photo = [_photoSource photoAtIndex:pageIndex];
@@ -611,7 +671,8 @@ static const NSTimeInterval kSlideshowInterval = 2;
 
 - (void)thumbsViewController:(TTThumbsViewController*)controller didSelectPhoto:(id<TTPhoto>)photo {
   self.centerPhoto = photo;
-  [controller removeFromSupercontroller];
+  [self.navigationController
+    popViewControllerAnimatedWithTransition:UIViewAnimationTransitionCurlUp];
 }
 
 - (BOOL)thumbsViewController:(TTThumbsViewController*)controller
@@ -653,6 +714,28 @@ static const NSTimeInterval kSlideshowInterval = 2;
 
 - (TTThumbsViewController*)createThumbsViewController {
   return [[[TTThumbsViewController alloc] initWithDelegate:self] autorelease];
+}
+
+- (void)didMoveToPhoto:(id<TTPhoto>)photo fromPhoto:(id<TTPhoto>)fromPhoto {
+}
+
+- (void)showActivity:(NSString*)title {
+  if (title) {
+    TTActivityLabel* label = [[TTActivityLabel alloc] initWithStyle:TTActivityLabelStyleBlackBezel];
+    label.tag = kActivityLabelTag;
+    label.text = title;
+    label.frame = _scrollView.frame;
+    [_innerView addSubview:label];
+
+    _scrollView.scrollEnabled = NO;
+  } else {
+    UIView* label = [_innerView viewWithTag:kActivityLabelTag];
+    if (label) {
+      [label removeFromSuperview];
+    }
+
+    _scrollView.scrollEnabled = YES;
+  }
 }
 
 @end

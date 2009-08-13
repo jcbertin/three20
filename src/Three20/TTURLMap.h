@@ -1,6 +1,6 @@
 #import "Three20/TTGlobal.h"
 
-@class TTURLPattern;
+@class TTURLNavigatorPattern;
 
 typedef enum {
   TTNavigationModeNone,
@@ -16,8 +16,8 @@ typedef enum {
   NSMutableArray* _fragmentPatterns;
   NSMutableDictionary* _stringPatterns;
   NSMutableDictionary* _schemes;
-  TTURLPattern* _defaultObjectPattern;
-  TTURLPattern* _hashPattern;
+  TTURLNavigatorPattern* _defaultObjectPattern;
+  TTURLNavigatorPattern* _hashPattern;
   BOOL _invalidPatterns;
 }
 
@@ -52,6 +52,8 @@ typedef enum {
  */
 - (void)from:(NSString*)URL toSharedViewController:(id)target;
 - (void)from:(NSString*)URL toSharedViewController:(id)target selector:(SEL)selector;
+- (void)from:(NSString*)URL parent:(NSString*)parentURL
+        toSharedViewController:(id)target;
 - (void)from:(NSString*)URL parent:(NSString*)parentURL
         toSharedViewController:(id)target selector:(SEL)selector;
 
@@ -102,6 +104,11 @@ typedef enum {
 - (void)removeObjectForURL:(NSString*)URL;
 
 /**
+ * Removes all bound objects;
+ */
+- (void)removeAllObjects;
+
+/**
  * Gets or creates the object with a pattern that matches the URL.
  *
  * Object mappings are checked first, and if no object is bound to the URL then pattern
@@ -109,7 +116,8 @@ typedef enum {
  */ 
 - (id)objectForURL:(NSString*)URL;
 - (id)objectForURL:(NSString*)URL query:(NSDictionary*)query;
-- (id)objectForURL:(NSString*)URL query:(NSDictionary*)query pattern:(TTURLPattern**)pattern;
+- (id)objectForURL:(NSString*)URL query:(NSDictionary*)query
+      pattern:(TTURLNavigatorPattern**)pattern;
 
 /**
  * 

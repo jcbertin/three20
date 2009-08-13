@@ -10,6 +10,7 @@
 @property(nonatomic,readonly) UIColor* timestampTextColor;
 @property(nonatomic,readonly) UIColor* linkTextColor;
 @property(nonatomic,readonly) UIColor* moreLinkTextColor;
+@property(nonatomic,readonly) UIColor* selectedTextColor;
 @property(nonatomic,readonly) UIColor* photoCaptionTextColor;
 
 @property(nonatomic,readonly) UIColor* navigationBarTintColor;
@@ -47,19 +48,22 @@
 @property(nonatomic,readonly) UIFont* tableTimestampFont;
 @property(nonatomic,readonly) UIFont* tableButtonFont;
 @property(nonatomic,readonly) UIFont* tableSummaryFont;
-@property(nonatomic,readonly) UIFont* tableBannerFont;
+@property(nonatomic,readonly) UIFont* tableHeaderPlainFont;
+@property(nonatomic,readonly) UIFont* tableHeaderGroupedFont;
 @property(nonatomic,readonly) UIFont* photoCaptionFont;
 @property(nonatomic,readonly) UIFont* messageFont;
 @property(nonatomic,readonly) UIFont* errorTitleFont;
 @property(nonatomic,readonly) UIFont* errorSubtitleFont;
 @property(nonatomic,readonly) UIFont* activityLabelFont;
+@property(nonatomic,readonly) UIFont* activityBannerFont;
 
 @property(nonatomic,readonly) UITableViewCellSelectionStyle tableSelectionStyle;
+
+- (TTStyle*)selectionFillStyle:(TTStyle*)next;
 
 - (TTStyle*)toolbarButtonForState:(UIControlState)state shape:(TTShape*)shape
             tintColor:(UIColor*)tintColor font:(UIFont*)font;
 
-- (TTStyle*)selectionFillStyle:(TTStyle*)next;
-
+- (TTStyle*)pageDotWithColor:(UIColor*)color;
 
 @end

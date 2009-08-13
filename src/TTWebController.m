@@ -37,14 +37,7 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // NSObject
 
-- (id)initWithURL:(NSURL*)URL {
-  if (self = [self init]) {
-    [self openURL:URL];
-  }
-  return self;
-}
-
-- (id)initWithURL:(NSURL*)URL query:(NSDictionary*)query {
+- (id)initWithNavigatorURL:(NSURL*)URL query:(NSDictionary*)query {
   if (self = [self init]) {
     NSURLRequest* request = [query objectForKey:@"request"];
     if (request) {
@@ -140,19 +133,28 @@
   TT_RELEASE_SAFELY(_activityItem);
 }
 
+- (void)viewWillDisappear:(BOOL)animated {
+  // If the browser launched the media player, it steals the key window and never gives it
+  // back, so this is a way to try and fix that
+  [self.view.window makeKeyWindow];
+
+  [super viewWillDisappear:animated];
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // UTViewController (TTCategory)
 
-- (void)persistView:(NSMutableDictionary*)state {
+- (BOOL)persistView:(NSMutableDictionary*)state {
   NSString* URL = self.URL.absoluteString;
-  if (URL) {
+  if (URL.length) {
     [state setObject:URL forKey:@"URL"];
   }
+  return [super persistView:state];
 }
 
 - (void)restoreView:(NSDictionary*)state {
   NSString* URL = [state objectForKey:@"URL"];
-  if (URL) {
+  if (URL.length && ![URL isEqualToString:@"about:blank"]) {
     [self openURL:[NSURL URLWithString:URL]];
   }
 }
@@ -164,13 +166,15 @@
         navigationType:(UIWebViewNavigationType)navigationType {
   [_loadingURL release];
   _loadingURL = [request.URL retain];
+  _backButton.enabled = [_webView canGoBack];
+  _forwardButton.enabled = [_webView canGoForward];
   return YES;
 }
 
 - (void)webViewDidStartLoad:(UIWebView*)webView {
   self.title = TTLocalizedString(@"Loading...", @"");
   if (!self.navigationItem.rightBarButtonItem) {
-    self.navigationItem.rightBarButtonItem = _activityItem;
+    [self.navigationItem setRightBarButtonItem:_activityItem animated:YES];
   }
   [_toolbar replaceItemWithTag:3 withItem:_stopButton];
   _backButton.enabled = [_webView canGoBack];
@@ -180,12 +184,15 @@
 
 - (void)webViewDidFinishLoad:(UIWebView*)webView {
   TT_RELEASE_SAFELY(_loadingURL);
+  
   self.title = [_webView stringByEvaluatingJavaScriptFromString:@"document.title"];
   if (self.navigationItem.rightBarButtonItem == _activityItem) {
-    self.navigationItem.rightBarButtonItem = nil;
+    [self.navigationItem setRightBarButtonItem:nil animated:YES];
   }
   [_toolbar replaceItemWithTag:3 withItem:_refreshButton];
-  [_webView canGoBack];
+
+  _backButton.enabled = [_webView canGoBack];
+  _forwardButton.enabled = [_webView canGoForward];    
 }
 
 - (void)webView:(UIWebView*)webView didFailLoadWithError:(NSError*)error {

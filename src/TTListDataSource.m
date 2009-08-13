@@ -1,4 +1,5 @@
 #import "Three20/TTListDataSource.h"
+#import "Three20/TTTableItem.h"
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -59,7 +60,11 @@
 // TTTableViewDataSource
 
 - (id)tableView:(UITableView*)tableView objectForRowAtIndexPath:(NSIndexPath*)indexPath {
-  return [_items objectAtIndex:indexPath.row];
+  if (indexPath.row < _items.count) {
+    return [_items objectAtIndex:indexPath.row];
+  } else {
+    return nil;
+  }
 }
 
 - (NSIndexPath*)tableView:(UITableView*)tableView indexPathForObject:(id)object {
@@ -78,6 +83,16 @@
     _items = [[NSMutableArray alloc] init];
   }
   return _items;
+}
+
+- (NSIndexPath*)indexPathOfItemWithUserInfo:(id)userInfo {
+  for (NSInteger i = 0; i < _items.count; ++i) {
+    TTTableItem* item = [_items objectAtIndex:i];
+    if (item.userInfo == userInfo) {
+      return [NSIndexPath indexPathForRow:i inSection:0];
+    }
+  }
+  return nil;
 }
 
 @end
@@ -163,11 +178,11 @@
 // UITableViewDataSource
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	return _sections.count ? _sections.count : 1;
+	return _sections ? _sections.count : 1;
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-  if (_sections.count) {
+  if (_sections) {
     NSArray* items = [_items objectAtIndex:section];
     return items.count;
   } else {
@@ -217,28 +232,45 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // public
 
-- (NSArray*)lettersForSectionsWithSearch:(BOOL)withSearch withCount:(BOOL)withCount {
-  if (_sections) {
-    NSMutableArray* titles = [NSMutableArray array];
-    if (withSearch) {
-      [titles addObject:UITableViewIndexSearch];
-    }
-    
-    for (NSString* label in _sections) {
-      if (label.length) {
-        NSString* letter = [label substringToIndex:1];
-        [titles addObject:letter];    
+- (NSIndexPath*)indexPathOfItemWithUserInfo:(id)userInfo {
+  if (_sections.count) {
+    for (NSInteger i = 0; i < _items.count; ++i) {
+      NSArray* items = [_items objectAtIndex:i];
+      for (NSInteger j = 0; j < items.count; ++j) {
+        TTTableItem* item = [items objectAtIndex:j];
+        if (item.userInfo == userInfo) {
+          return [NSIndexPath indexPathForRow:j inSection:i];
+        }
       }
     }
-    
-    if (withCount) {
-      [titles addObject:@"#"];
-    }
-    
-    return titles;
   } else {
-    return nil;
+    for (NSInteger i = 0; i < _items.count; ++i) {
+      TTTableItem* item = [_items objectAtIndex:i];
+      if (item.userInfo == userInfo) {
+        return [NSIndexPath indexPathForRow:i inSection:0];
+      }
+    }
   }
+  return nil;
+}
+
+- (void)removeItemAtIndexPath:(NSIndexPath*)indexPath {
+  [self removeItemAtIndexPath:indexPath andSectionIfEmpty:NO];
+}
+
+- (BOOL)removeItemAtIndexPath:(NSIndexPath*)indexPath andSectionIfEmpty:(BOOL)andSection {
+  if (_sections.count) {
+    NSMutableArray* items = [_items objectAtIndex:indexPath.section];
+    [items removeObjectAtIndex:indexPath.row];
+    if (!items.count) {
+      [_sections removeObjectAtIndex:indexPath.section];
+      [_items removeObjectAtIndex:indexPath.section];
+      return YES;
+    }
+  } else if (!indexPath.section) {
+    [_items removeObjectAtIndex:indexPath.row];
+  }
+  return NO;
 }
 
 @end

@@ -3,6 +3,7 @@
 #import "Three20/TTTableItemCell.h"
 #import "Three20/TTURLCache.h"
 #import "Three20/TTTextEditor.h"
+#import "Three20/TTStyledText.h"
 #import <objc/runtime.h>
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -10,6 +11,27 @@
 @implementation TTTableViewDataSource
 
 @synthesize model = _model;
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// class public
+
++ (NSArray*)lettersForSectionsWithSearch:(BOOL)search summary:(BOOL)summary {
+  NSMutableArray* titles = [NSMutableArray array];
+  if (search) {
+    [titles addObject:UITableViewIndexSearch];
+  }
+  
+  for (unichar c = 'A'; c <= 'Z'; ++c) {
+    NSString* letter = [NSString stringWithFormat:@"%c", c];
+    [titles addObject:letter];
+  }
+  
+  if (summary) {
+    [titles addObject:@"#"];
+  }
+  
+  return titles;
+}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // NSObject
@@ -65,22 +87,68 @@
 
 - (NSInteger)tableView:(UITableView*)tableView sectionForSectionIndexTitle:(NSString*)title 
             atIndex:(NSInteger)index {
-  if (index == 0 && tableView.tableHeaderView)  {
-    // This is a hack to get the table header to appear when the user touches the
-    // first row in the section index.  By default, it shows the first row, which is
-    // not usually what you want.
-    [tableView scrollRectToVisible:tableView.tableHeaderView.bounds animated:NO];
-    return -1;
+  if (tableView.tableHeaderView) {
+    if (index == 0)  {
+      // This is a hack to get the table header to appear when the user touches the
+      // first row in the section index.  By default, it shows the first row, which is
+      // not usually what you want.
+      [tableView scrollRectToVisible:tableView.tableHeaderView.bounds animated:NO];
+      return -1;
+    }
+  }
+
+  NSString* letter = [title substringToIndex:1];
+  NSInteger sectionCount = [tableView numberOfSections];
+  for (NSInteger i = 0; i < sectionCount; ++i) {
+    NSString* section  = [tableView.dataSource tableView:tableView titleForHeaderInSection:i];
+    if ([section hasPrefix:letter]) {
+      return i;
+    }
+  }
+  if (index >= sectionCount) {
+    return sectionCount-1;
   } else {
     return index;
   }
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
+// TTModel
+
+- (NSMutableArray*)delegates {
+  return nil;
+}
+
+- (BOOL)isLoaded {
+  return YES;
+}
+
+- (BOOL)isLoading {
+  return NO;
+}
+
+- (BOOL)isLoadingMore {
+  return NO;
+}
+
+- (BOOL)isOutdated {
+  return NO;
+}
+
+- (void)load:(TTURLRequestCachePolicy)cachePolicy more:(BOOL)more {
+}
+
+- (void)cancel {
+}
+
+- (void)invalidate:(BOOL)erase {
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
 // TTTableViewDataSource
 
 - (id<TTModel>)model {
-  return _model;
+  return _model ? _model : self;
 }
 
 - (id)tableView:(UITableView*)tableView objectForRowAtIndexPath:(NSIndexPath*)indexPath {
@@ -112,6 +180,8 @@
     } else {
       return [TTTableTextItemCell class];
     }
+  } else if ([object isKindOfClass:[TTStyledText class]]) {
+    return [TTStyledTextTableCell class];
   } else if ([object isKindOfClass:[UIControl class]]
              || [object isKindOfClass:[UITextView class]]
              || [object isKindOfClass:[TTTextEditor class]]) {
@@ -157,7 +227,7 @@
 }
 
 - (UIImage*)imageForEmpty {
-  return nil;
+  return [self imageForError:nil];
 }
 
 - (NSString*)titleForEmpty {
@@ -173,11 +243,56 @@
 }
 
 - (NSString*)titleForError:(NSError*)error {
-  return TTLocalizedString(@"Error", @"");
+  return TTDescriptionForError(error);
 }
 
 - (NSString*)subtitleForError:(NSError*)error {
   return TTLocalizedString(@"Sorry, there was an error.", @"");
+}
+
+@end
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+@implementation TTTableViewInterstialDataSource
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// TTTableViewDataSource
+
+- (id<TTModel>)model {
+  return self;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// TTModel
+
+- (NSMutableArray*)delegates {
+  return nil;
+}
+
+- (BOOL)isLoaded {
+  return NO;
+}
+
+- (BOOL)isLoading {
+  return YES;
+}
+
+- (BOOL)isLoadingMore {
+  return NO;
+}
+
+- (BOOL)isOutdated {
+  return NO;
+}
+
+- (void)load:(TTURLRequestCachePolicy)cachePolicy more:(BOOL)more {
+}
+
+- (void)cancel {
+}
+
+- (void)invalidate:(BOOL)erase {
 }
 
 @end

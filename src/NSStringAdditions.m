@@ -118,12 +118,35 @@
   return [NSDictionary dictionaryWithDictionary:pairs];
 }
 
+- (NSString*)stringByAddingQueryDictionary:(NSDictionary*)query {
+  NSMutableArray* pairs = [NSMutableArray array];
+  for (NSString* key in [query keyEnumerator]) {
+    NSString* value = [query objectForKey:key];
+    value = [value stringByReplacingOccurrencesOfString:@"?" withString:@"%3F"];
+    value = [value stringByReplacingOccurrencesOfString:@"=" withString:@"%3D"];
+    NSString* pair = [NSString stringWithFormat:@"%@=%@", key, value];
+    [pairs addObject:pair];
+  }
+  
+  NSString* params = [pairs componentsJoinedByString:@"&"];
+  if ([self rangeOfString:@"?"].location == NSNotFound) {
+    return [self stringByAppendingFormat:@"?%@", params];
+  } else {
+    return [self stringByAppendingFormat:@"&%@", params];
+  }
+}
+
 - (id)objectValue {
   return [[TTNavigator navigator].URLMap objectForURL:self];
 }
 
 - (void)openURL {
   [[TTNavigator navigator] openURL:self animated:YES];
+}
+
+- (void)openURLFromButton:(UIView*)button {
+  NSDictionary* query = [NSDictionary dictionaryWithObjectsAndKeys:button, @"__target__", nil];
+  [[TTNavigator navigator] openURL:self query:query animated:YES];
 }
 
 @end

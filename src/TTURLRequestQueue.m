@@ -263,7 +263,7 @@ static TTURLRequestQueue* gMainQueue = nil;
     return YES;
   }
 }
- 
+
 @end
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -392,7 +392,7 @@ static TTURLRequestQueue* gMainQueue = nil;
           }
         }
       } else {
-        request.timestamp = timestamp;
+        request.timestamp = timestamp ? timestamp : [NSDate date];
         request.respondedFromCache = YES;
 
         for (id<TTURLRequestDelegate> delegate in request.delegates) {
@@ -637,6 +637,11 @@ static TTURLRequestQueue* gMainQueue = nil;
     NSData* body = request.httpBody;
     if (body) {
       [URLRequest setHTTPBody:body];
+    }
+
+    NSDictionary* headers = request.headers;
+    for (NSString *key in [headers keyEnumerator]) {
+      [URLRequest setValue:[headers objectForKey:key] forHTTPHeaderField:key];
     }
   }
   

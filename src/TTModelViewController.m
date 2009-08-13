@@ -1,17 +1,5 @@
 #import "Three20/TTModelViewController.h"
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-
-@interface TTDefaultModel : TTModel
-@end
-
-@implementation TTDefaultModel
-
-- (BOOL)isLoaded {
-  return YES;
-}
-
-@end
+#import "Three20/TTNavigator.h"
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -42,13 +30,18 @@
 }
 
 - (void)updateViewStates {
+  if (_flags.isModelDidRefreshInvalid) {
+    [self didRefreshModel];
+    _flags.isModelDidRefreshInvalid = NO;
+  }
   if (_flags.isModelWillLoadInvalid) {
     [self willLoadModel];
     _flags.isModelWillLoadInvalid = NO;
   }
   if (_flags.isModelDidLoadInvalid) {
-    [self didLoadModel];
+    [self didLoadModel:_flags.isModelDidLoadFirstTimeInvalid];
     _flags.isModelDidLoadInvalid = NO;
+    _flags.isModelDidLoadFirstTimeInvalid = NO;
     _flags.isShowingModel = NO;
   }
   
@@ -103,7 +96,8 @@
   
   if (showModel) {
     [self showModel:YES];
-    [self didShowModel];
+    [self didShowModel:_flags.isModelDidShowFirstTimeInvalid];
+    _flags.isModelDidShowFirstTimeInvalid = NO;
   }
   if (showEmpty) {
     [self showEmpty:YES];
@@ -116,25 +110,8 @@
   }
 }
 
-- (void)updateView {
-  if (_flags.isViewInvalid && !_flags.isViewSuspended && !_flags.isUpdatingView) {
-    _flags.isUpdatingView = YES;
-
-    // Ensure the model is created
-    self.model;
-    // Ensure the view is created
-    self.view;
-
-    [self updateViewStates];
-
-    if (_frozenState && _flags.isShowingModel) {
-      [self restoreView:_frozenState];
-      TT_RELEASE_SAFELY(_frozenState);
-    }
-
-    _flags.isViewInvalid = NO;
-    _flags.isUpdatingView = NO;
-  }
+- (void)createInterstitialModel {
+  self.model = [[[TTModel alloc] init] autorelease];
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -144,8 +121,11 @@
   if (self = [super init]) {
     _model = nil;
     _modelError = nil;
-    _flags.isModelDidLoadInvalid = NO;
+    _flags.isModelDidRefreshInvalid = NO;
     _flags.isModelWillLoadInvalid = NO;
+    _flags.isModelDidLoadInvalid = NO;
+    _flags.isModelDidLoadFirstTimeInvalid = NO;
+    _flags.isModelDidShowFirstTimeInvalid = NO;
     _flags.isViewInvalid = YES;
     _flags.isViewSuspended = NO;
     _flags.isUpdatingView = NO;
@@ -172,7 +152,6 @@
   _hasViewAppeared = YES;
   
   [self updateView];
-  [self reloadIfNeeded];
   
   [super viewWillAppear:animated];
 }
@@ -180,10 +159,17 @@
 - (void)didReceiveMemoryWarning {
   if (_hasViewAppeared && !_isViewAppearing) {
     [super didReceiveMemoryWarning];
-    [self invalidateView];
+    [self refresh];
   } else {
     [super didReceiveMemoryWarning];
   }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// UIViewController (TTCategory)
+
+- (void)delayDidEnd {
+  [self invalidateModel];
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -191,6 +177,8 @@
 
 - (void)modelDidStartLoad:(id<TTModel>)model {
   if (model == self.model) {
+    _flags.isModelWillLoadInvalid = YES;
+    _flags.isModelDidLoadFirstTimeInvalid = YES;
     [self invalidateView];
   }
 }
@@ -221,6 +209,9 @@
   }
 }
 
+- (void)model:(id<TTModel>)model didUpdateObject:(id)object atIndexPath:(NSIndexPath*)indexPath {
+}
+
 - (void)model:(id<TTModel>)model didInsertObject:(id)object atIndexPath:(NSIndexPath*)indexPath {
 }
 
@@ -244,9 +235,11 @@
 
 - (id<TTModel>)model {
   if (!_model) {
-    [self createModel];
+    if (![TTNavigator navigator].isDelayed) {
+      [self createModel];
+    }
     if (!_model) {
-      self.model = [[[TTDefaultModel alloc] init] autorelease];
+      [self createInterstitialModel];
     }
   }
   return _model;
@@ -258,9 +251,13 @@
     [_model release];
     _model = [model retain];
     [_model.delegates addObject:self];
+    TT_RELEASE_SAFELY(_modelError);
     
     if (_model) {
-      _flags.isModelWillLoadInvalid = YES;
+      _flags.isModelWillLoadInvalid = NO;
+      _flags.isModelDidLoadInvalid = NO;
+      _flags.isModelDidLoadFirstTimeInvalid = NO;
+      _flags.isModelDidShowFirstTimeInvalid = YES;
     }
     
     [self refresh];
@@ -277,6 +274,16 @@
 }
 
 - (void)createModel {
+}
+
+- (void)invalidateModel {
+  BOOL wasModelCreated = self.isModelCreated;
+  [self resetViewStates];
+  [_model.delegates removeObject:self];
+  TT_RELEASE_SAFELY(_model);
+  if (wasModelCreated) {
+    self.model;
+  }
 }
 
 - (BOOL)isModelCreated {
@@ -305,21 +312,22 @@
 }
 
 - (void)reloadIfNeeded {
-  if ([self shouldReload]) {
+  if ([self shouldReload] && !self.model.isLoading) {
     [self reload];
   }
 }
 
 - (void)refresh {
   _flags.isViewInvalid = YES;
-  _flags.isModelWillLoadInvalid = YES;
-
-  BOOL tryToLoad = !self.model.isLoading && !self.model.isLoaded;
-  if (tryToLoad && [self shouldLoad]) {
+  _flags.isModelDidRefreshInvalid = YES;
+  
+  BOOL loading = self.model.isLoading;
+  BOOL loaded = self.model.isLoaded;
+  if (!loading && !loaded && [self shouldLoad]) {
     [self.model load:TTURLRequestCachePolicyDefault more:NO];
-  } else if (tryToLoad && [self shouldReload]) {
+  } else if (!loading && loaded && [self shouldReload]) {
     [self.model load:TTURLRequestCachePolicyNetwork more:NO];
-  } else if (tryToLoad && [self shouldLoadMore]) {
+  } else if (!loading && [self shouldLoadMore]) {
     [self.model load:TTURLRequestCachePolicyDefault more:YES];
   } else {
     _flags.isModelDidLoadInvalid = YES;
@@ -345,18 +353,39 @@
   }
 }
 
-- (void)validateView {
-  _flags.isViewInvalid = YES;
-  [self updateView];
+- (void)updateView {
+  if (_flags.isViewInvalid && !_flags.isViewSuspended && !_flags.isUpdatingView) {
+    _flags.isUpdatingView = YES;
+
+    // Ensure the model is created
+    self.model;
+    // Ensure the view is created
+    self.view;
+
+    [self updateViewStates];
+
+    if (_frozenState && _flags.isShowingModel) {
+      [self restoreView:_frozenState];
+      TT_RELEASE_SAFELY(_frozenState);
+    }
+
+    _flags.isViewInvalid = NO;
+    _flags.isUpdatingView = NO;
+
+    [self reloadIfNeeded];
+  }
+}
+
+- (void)didRefreshModel {
 }
 
 - (void)willLoadModel {
 }
 
-- (void)didLoadModel {
+- (void)didLoadModel:(BOOL)firstTime {
 }
 
-- (void)didShowModel {
+- (void)didShowModel:(BOOL)firstTime {
 }
 
 - (void)showLoading:(BOOL)show {

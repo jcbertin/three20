@@ -3,19 +3,20 @@
 #import "Three20/TTScrollView.h"
 #import "Three20/TTThumbsViewController.h"
 
-@class TTScrollView, TTPhotoView;
+@class TTScrollView, TTPhotoView, TTStyle;
 
 @interface TTPhotoViewController : TTModelViewController
           <TTScrollViewDelegate, TTScrollViewDataSource, TTThumbsViewControllerDelegate> {
   id<TTPhotoSource> _photoSource;
   id<TTPhoto> _centerPhoto;
-  NSUInteger _centerPhotoIndex;
+  NSInteger _centerPhotoIndex;
   UIView* _innerView;
   TTScrollView* _scrollView;
   TTPhotoView* _photoStatusView;
   UIToolbar* _toolbar;
   UIBarButtonItem* _nextButton;
   UIBarButtonItem* _previousButton;
+  TTStyle* _captionStyle;
   UIImage* _defaultImage;
   NSString* _statusText;
   TTThumbsViewController* _thumbsController;
@@ -44,7 +45,7 @@
  * Because centerPhoto can be nil while waiting for the source to load the photo, this property
  * must be maintained even though centerPhoto has its own index property.
  */
-@property(nonatomic,readonly) NSUInteger centerPhotoIndex;
+@property(nonatomic,readonly) NSInteger centerPhotoIndex;
 
 /**
  * The default image to show before a photo has been loaded.
@@ -52,9 +53,18 @@
 @property(nonatomic,retain) UIImage* defaultImage;
 
 /**
+<<<<<<< HEAD:src/Three20/TTPhotoViewController.h
  * Auto hide bars after delay without user interaction.
  */
 @property(nonatomic,assign) BOOL autoHideBars;
+=======
+ * The style to use for the caption label.
+ */
+@property(nonatomic,retain) TTStyle* captionStyle;
+
+- (id)initWithPhoto:(id<TTPhoto>)photo;
+- (id)initWithPhotoSource:(id<TTPhotoSource>)photoSource;
+>>>>>>> joehewitt/master:src/Three20/TTPhotoViewController.h
 
 /**
  * Creates a photo view for a new page.
@@ -69,5 +79,15 @@
  * Do not call this directly. It is meant to be overriden by subclasses.
  */
 - (TTThumbsViewController*)createThumbsViewController;
+
+/**
+ * Sent to the controller after it moves from one photo to another.
+ */
+- (void)didMoveToPhoto:(id<TTPhoto>)photo fromPhoto:(id<TTPhoto>)fromPhoto;
+
+/**
+ * Shows or hides an activity label on top of the photo.
+ */
+- (void)showActivity:(NSString*)title;
 
 @end

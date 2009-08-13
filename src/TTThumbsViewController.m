@@ -47,7 +47,7 @@ static CGFloat kThumbnailRowHeight = 79;
 
 - (NSInteger)tableView:(UITableView*)tableView numberOfRowsInSection:(NSInteger)section {
   NSInteger maxIndex = _photoSource.maxPhotoIndex;
-  if (!_photoSource.isLoading && maxIndex > 0) {
+  if (maxIndex >= 0) {
     maxIndex += 1;
     NSInteger count =  ceil((maxIndex / kColumnCount) + (maxIndex % kColumnCount ? 1 : 0));
     if (self.hasMoreToLoad) {
@@ -70,11 +70,17 @@ static CGFloat kThumbnailRowHeight = 79;
 - (id)tableView:(UITableView*)tableView objectForRowAtIndexPath:(NSIndexPath*)indexPath {
   if (indexPath.row == [tableView numberOfRowsInSection:0]-1 && self.hasMoreToLoad) {
     NSString* text = TTLocalizedString(@"Load More Photos...", @"");
-    NSString* caption = [NSString stringWithFormat:
-      TTLocalizedString(@"Showing %d of %d Photos", @""), _photoSource.maxPhotoIndex+1,
-      _photoSource.numberOfPhotos];
-
-    return [TTTableMoreButton itemWithText:text caption:caption];
+    NSString* caption = nil;
+    if (_photoSource.numberOfPhotos == -1) {
+      caption = [NSString stringWithFormat:TTLocalizedString(@"Showing %@ Photos", @""),
+                                           TTFormatInteger(_photoSource.maxPhotoIndex+1)];
+    } else {
+      caption = [NSString stringWithFormat:TTLocalizedString(@"Showing %@ of %@ Photos", @""),
+                                           TTFormatInteger(_photoSource.maxPhotoIndex+1),
+                                           TTFormatInteger(_photoSource.numberOfPhotos)];
+    }
+    
+    return [TTTableMoreButton itemWithText:text subtitle:caption];
   } else {
     return [_photoSource photoAtIndex:indexPath.row * kColumnCount];
   }
@@ -96,8 +102,14 @@ static CGFloat kThumbnailRowHeight = 79;
   }
 }
 
-- (UIImage*)imageForEmpty {
-  return TTIMAGE(@"bundle://Three20.bundle/images/photoDefault.png");
+- (NSIndexPath*)tableView:(UITableView*)tableView willInsertObject:(id)object
+                atIndexPath:(NSIndexPath*)indexPath {
+  return nil;
+}
+
+- (NSIndexPath*)tableView:(UITableView*)tableView willRemoveObject:(id)object
+                atIndexPath:(NSIndexPath*)indexPath {
+  return nil;
 }
 
 - (NSString*)titleForEmpty {
@@ -112,12 +124,8 @@ static CGFloat kThumbnailRowHeight = 79;
   return TTIMAGE(@"bundle://Three20.bundle/images/photoDefault.png");
 }
 
-- (NSString*)titleForError:(NSError*)error {
-  return TTLocalizedString(@"Error", @"");
-}
-
 - (NSString*)subtitleForError:(NSError*)error {
-  return TTLocalizedString(@"This photo set could not be loaded.", @"");
+  return TTLocalizedString(@"Unable to load this photo set.", @"");
 }
 
 @end
@@ -175,11 +183,11 @@ static CGFloat kThumbnailRowHeight = 79;
     _delegate = nil;
     _photoSource = nil;
     
-    self.hidesBottomBarWhenPushed = YES;
+    self.statusBarStyle = UIStatusBarStyleBlackTranslucent;
     self.navigationBarStyle = UIBarStyleBlackTranslucent;
     self.navigationBarTintColor = nil;
-    self.statusBarStyle = UIStatusBarStyleBlackTranslucent;
     self.wantsFullScreenLayout = YES;
+    self.hidesBottomBarWhenPushed = YES;
   }
   
   return self;
@@ -195,29 +203,15 @@ static CGFloat kThumbnailRowHeight = 79;
 // UIViewController
 
 - (void)loadView {
-  CGRect screenFrame = [UIScreen mainScreen].bounds;
-  self.view = [[[UIView alloc] initWithFrame:screenFrame] autorelease];
-  self.view.autoresizesSubviews = YES;
-	self.view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-
-  CGRect innerFrame = CGRectMake(0, 0,
-                                 screenFrame.size.width, screenFrame.size.height + TT_CHROME_HEIGHT);
-  UIView* innerView = [[[UIView alloc] initWithFrame:innerFrame] autorelease];
-  innerView.backgroundColor = TTSTYLEVAR(backgroundColor);
-  [self.view addSubview:innerView];
+  [super loadView];
   
-  CGRect tableFrame = CGRectMake(0, TT_CHROME_HEIGHT,
-                                 screenFrame.size.width, screenFrame.size.height - TT_CHROME_HEIGHT);
-  self.tableView = [[[UITableView alloc] initWithFrame:tableFrame
-                                         style:UITableViewStylePlain] autorelease];
   self.tableView.rowHeight = kThumbnailRowHeight;
 	self.tableView.autoresizingMask = UIViewAutoresizingFlexibleWidth
     | UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleBottomMargin;
   self.tableView.backgroundColor = TTSTYLEVAR(backgroundColor);
   self.tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
-  self.tableView.contentInset = UIEdgeInsetsMake(4, 0, 0, 0);
-  self.tableView.clipsToBounds = NO;
-  [innerView addSubview:self.tableView];
+  self.tableView.contentInset = UIEdgeInsetsMake(TTBarsHeight()+4, 0, 0, 0);
+  self.tableView.scrollIndicatorInsets = UIEdgeInsetsMake(TTBarsHeight(), 0, 0, 0);
 }
 
 - (void)viewDidAppear:(BOOL)animated {
@@ -233,12 +227,12 @@ static CGFloat kThumbnailRowHeight = 79;
 //////////////////////////////////////////////////////////////////////////////////////////////////
 // UIViewController (TTCategory)
 
-- (void)persistView:(NSMutableDictionary*)state {
-  [super persistView:state];
+- (BOOL)persistView:(NSMutableDictionary*)state {
   NSString* delegate = [[TTNavigator navigator] pathForObject:_delegate];
   if (delegate) {
     [state setObject:delegate forKey:@"delegate"];
   }
+  return [super persistView:state];
 }
 
 - (void)restoreView:(NSDictionary*)state {
@@ -266,8 +260,17 @@ static CGFloat kThumbnailRowHeight = 79;
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // TTModelViewController
 
-- (void)didLoadModel {
+- (void)didRefreshModel {
+  [super didRefreshModel];
   self.title = _photoSource.title;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// TTTableViewController
+
+- (CGRect)rectForOverlayView {
+  return TTRectContract(CGRectOffset([super rectForOverlayView], 0, TTBarsHeight()-_tableView.top),
+                        0, TTBarsHeight());
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

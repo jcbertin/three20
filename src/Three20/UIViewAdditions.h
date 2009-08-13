@@ -20,6 +20,9 @@
 @property(nonatomic,readonly) CGFloat screenViewY;
 @property(nonatomic,readonly) CGRect screenFrame;
 
+@property(nonatomic) CGPoint origin;
+@property(nonatomic) CGSize size;
+
 @property(nonatomic,readonly) CGFloat orientationWidth;
 @property(nonatomic,readonly) CGFloat orientationHeight;
 
@@ -61,7 +64,7 @@
  * This will send a notification pretending that a keyboard is about to appear so that
  * observers who adjust their layout for the keyboard will also adjust for this view.
  */
-- (void)presentAsKeyboard;
+- (void)presentAsKeyboardInView:(UIView*)containingView;
 
 /**
  * Hides a view that was showing in a window at the bottom of the screen (via presentAsKeyboard).

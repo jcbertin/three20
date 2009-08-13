@@ -24,7 +24,6 @@ static NSMutableDictionary* gPopupViewControllers = nil;
 - (id)initWithFrame:(CGRect)frame {
   if (self = [super initWithFrame:frame]) {
     _popupViewController = nil;
-    self.backgroundColor = [UIColor blueColor];
   }
   return self;
 }
@@ -50,45 +49,14 @@ static NSMutableDictionary* gPopupViewControllers = nil;
 @implementation UIViewController (TTCategory)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-// private
-
-- (void)showNavigationBar:(BOOL)show animated:(BOOL)animated {
-  if (animated) {
-    [UIView beginAnimations:nil context:NULL];
-    [UIView setAnimationDuration:TT_TRANSITION_DURATION];
-  }
-
-  self.navigationController.navigationBar.alpha = show ? 1 : 0;
-  
-  if (animated) {
-    [UIView commitAnimations];
-  }
-}
-
-- (UIViewAnimationTransition)invertTransition:(UIViewAnimationTransition)transition {
-  switch (transition) {
-    case UIViewAnimationTransitionCurlUp:
-      return UIViewAnimationTransitionCurlDown;
-    case UIViewAnimationTransitionCurlDown:
-      return UIViewAnimationTransitionCurlUp;
-    case UIViewAnimationTransitionFlipFromLeft:
-      return UIViewAnimationTransitionFlipFromRight;
-    case UIViewAnimationTransitionFlipFromRight:
-      return UIViewAnimationTransitionFlipFromLeft;
-    default:
-      return UIViewAnimationTransitionNone;
-  }
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
 // NSObject
 
-// Swizzled with dealloc by TTURLMap (only if you're using TTURLMap)
+// Swapped with dealloc by TTURLMap (only if you're using TTURLMap)
 - (void)ttdealloc {
-  NSString* URL = self.navigatorURL;
+  NSString* URL = self.originalNavigatorURL;
   if (URL) {
     [[TTNavigator navigator].URLMap removeObjectForURL:URL];
-    self.navigatorURL = nil;
+    self.originalNavigatorURL = nil;
   }
 
   self.superController = nil;
@@ -101,13 +69,21 @@ static NSMutableDictionary* gPopupViewControllers = nil;
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // public
 
+- (id)initWithNavigatorURL:(NSURL*)URL query:(NSDictionary*)query {
+  return [self init];
+}
+
 - (NSString*)navigatorURL {
-  NSString* key = [NSString stringWithFormat:@"%d", self];
+  return self.originalNavigatorURL;
+}
+
+- (NSString*)originalNavigatorURL {
+  NSString* key = [NSString stringWithFormat:@"%d", self.hash];
   return [gNavigatorURLs objectForKey:key];
 }
 
-- (void)setNavigatorURL:(NSString*)URL {
-  NSString* key = [NSString stringWithFormat:@"%d", self];
+- (void)setOriginalNavigatorURL:(NSString*)URL {
+  NSString* key = [NSString stringWithFormat:@"%d", self.hash];
   if (URL) {
     if (!gNavigatorURLs) {
       gNavigatorURLs = [[NSMutableDictionary alloc] init];
@@ -134,13 +110,13 @@ static NSMutableDictionary* gPopupViewControllers = nil;
   if (parent) {
     return parent;
   } else {
-    NSString* key = [NSString stringWithFormat:@"%d", self];
+    NSString* key = [NSString stringWithFormat:@"%d", self.hash];
     return [gSuperControllers objectForKey:key];
   }
 }
 
 - (void)setSuperController:(UIViewController*)viewController {
-  NSString* key = [NSString stringWithFormat:@"%d", self];
+  NSString* key = [NSString stringWithFormat:@"%d", self.hash];
   if (viewController) {
     if (!gSuperControllers) {
       gSuperControllers = TTCreateNonRetainingDictionary();
@@ -179,12 +155,12 @@ static NSMutableDictionary* gPopupViewControllers = nil;
 }
 
 - (UIViewController*)popupViewController {
-  NSString* key = [NSString stringWithFormat:@"%d", self];
+  NSString* key = [NSString stringWithFormat:@"%d", self.hash];
   return [gPopupViewControllers objectForKey:key];
 }
 
 - (void)setPopupViewController:(UIViewController*)viewController {
-  NSString* key = [NSString stringWithFormat:@"%d", self];
+  NSString* key = [NSString stringWithFormat:@"%d", self.hash];
   if (viewController) {
     if (!gPopupViewControllers) {
       gPopupViewControllers = TTCreateNonRetainingDictionary();
@@ -209,32 +185,11 @@ static NSMutableDictionary* gPopupViewControllers = nil;
 
 - (void)removeFromSupercontrollerAnimated:(BOOL)animated {
   if (self.navigationController) {
-    if (animated) {
-      NSString* URL = self.navigatorURL;
-      UIViewAnimationTransition transition = URL
-        ? [[TTNavigator navigator].URLMap transitionForURL:URL] : UIViewAnimationTransitionNone;
-      if (!transition) {
-        [self.navigationController popViewControllerAnimated:YES];
-      } else  {
-        UIViewAnimationTransition inverseTransition = [self invertTransition:transition];
-        [self.navigationController popViewControllerAnimatedWithTransition:inverseTransition];
-      }
-    } else {
-      [self.navigationController popViewControllerAnimated:NO];
-    }
+    [self.navigationController popViewControllerAnimated:animated];
   }
 }
 
 - (void)bringControllerToFront:(UIViewController*)controller animated:(BOOL)animated {
-}
-
-- (void)persistNavigationPath:(NSMutableArray*)path {
-}
-
-- (void)persistView:(NSMutableDictionary*)state {
-}
-
-- (void)restoreView:(NSDictionary*)state {
 }
 
 - (NSString*)keyForSubcontroller:(UIViewController*)controller {
@@ -245,27 +200,30 @@ static NSMutableDictionary* gPopupViewControllers = nil;
   return nil;
 }
 
-- (void)alert:(NSString*)message title:(NSString*)title delegate:(id)delegate {
-  if (message) {
-    UIAlertView* alert = [[[UIAlertView alloc] initWithTitle:title message:message
-      delegate:delegate cancelButtonTitle:TTLocalizedString(@"OK", @"") otherButtonTitles:nil]
-      autorelease];
-    [alert show];
-  }
+- (BOOL)persistView:(NSMutableDictionary*)state {
+  return YES;
 }
 
-- (void)alert:(NSString*)message {
-  [self alert:message title:TTLocalizedString(@"Alert", @"") delegate:nil];
+- (void)restoreView:(NSDictionary*)state {
 }
 
-- (void)alertError:(NSString*)message {
-  [self alert:message title:TTLocalizedString(@"Error", @"") delegate:nil];
+- (void)persistNavigationPath:(NSMutableArray*)path {
+}
+
+- (void)delayDidEnd {
 }
 
 - (void)showBars:(BOOL)show animated:(BOOL)animated {
   [[UIApplication sharedApplication] setStatusBarHidden:!show animated:animated];
-  
-  [self showNavigationBar:show animated:animated];
+
+  if (animated) {
+    [UIView beginAnimations:nil context:NULL];
+    [UIView setAnimationDuration:TT_TRANSITION_DURATION];
+  }
+  self.navigationController.navigationBar.alpha = show ? 1 : 0;
+  if (animated) {
+    [UIView commitAnimations];
+  }
 }
 
 - (void)dismissModalViewController {

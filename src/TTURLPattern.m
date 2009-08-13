@@ -264,20 +264,10 @@ static TTURLArgumentType TTURLArgumentTypeForProperty(Class cls, NSString* prope
 
 @implementation TTURLPattern
 
-@synthesize navigationMode = _navigationMode, scheme = _scheme, URL = _URL, parentURL = _parentURL,
-            targetObject = _targetObject, targetClass = _targetClass, selector = _selector,
-            transition = _transition, specificity = _specificity, argumentCount = _argumentCount;
+@synthesize URL = _URL, scheme = _scheme, specificity = _specificity, selector = _selector;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // private
-
-- (Class)realTargetClass {
-  return _targetClass ? _targetClass : [_targetObject class];
-}
-
-- (BOOL)instantiatesClass {
-  return _targetClass && _navigationMode != TTNavigationModeNone;
-}
 
 - (id<TTURLPatternText>)parseText:(NSString*)text {
   NSInteger len = text.length;
@@ -314,17 +304,53 @@ static TTURLArgumentType TTURLArgumentTypeForProperty(Class cls, NSString* prope
   [_query setObject:component forKey:name];
 }
 
-- (void)makeSelectorWithNames:(NSArray*)names {
+- (void)setSelectorWithNames:(NSArray*)names {
   NSString* selectorName = [[names componentsJoinedByString:@":"] stringByAppendingString:@":"];
   SEL selector = NSSelectorFromString(selectorName);
-  if (!(_targetClass || _targetObject)
-      || (_targetClass && class_respondsToSelector(_targetClass, selector))
-      || (_targetObject && [_targetObject respondsToSelector:selector])) {
+  [self setSelectorIfPossible:selector];
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// NSObject
+
+- (id)init {
+  if (self = [super init]) {
+    _URL = nil;
+    _scheme = nil;
+    _path = [[NSMutableArray alloc] init];
+    _query = nil;
+    _fragment = nil;
+    _specificity = 0;
+    _selector = nil;
+  }
+  return self;
+}
+
+- (void)dealloc {
+  TT_RELEASE_SAFELY(_URL);
+  TT_RELEASE_SAFELY(_scheme);
+  TT_RELEASE_SAFELY(_path);
+  TT_RELEASE_SAFELY(_query);
+  TT_RELEASE_SAFELY(_fragment);
+  [super dealloc];
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// public
+
+- (Class)classForInvocation {
+  return nil;
+}
+
+- (void)setSelectorIfPossible:(SEL)selector {
+  Class cls = [self classForInvocation];
+  if (!cls || class_respondsToSelector(cls, selector) || class_getClassMethod(cls, selector)) {
     _selector = selector;
   }
 }
 
-- (void)compileURL:(NSURL*)URL {
+- (void)compileURL {
+  NSURL* URL = [NSURL URLWithString:_URL];
   _scheme = [URL.scheme copy];
   if (URL.host) {
     [self parsePathComponent:URL.host];
@@ -348,6 +374,28 @@ static TTURLArgumentType TTURLArgumentTypeForProperty(Class cls, NSString* prope
   if (URL.fragment) {
     _fragment = [[self parseText:URL.fragment] retain];
   }
+}
+
+@end
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+@implementation TTURLNavigatorPattern
+
+@synthesize targetClass = _targetClass, targetObject = _targetObject,
+            navigationMode = _navigationMode, parentURL = _parentURL,
+            transition = _transition, argumentCount = _argumentCount;
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// private
+
+- (BOOL)instantiatesClass {
+  return _targetClass && _navigationMode;
+}
+
+- (BOOL)callsInstanceMethod {
+  return (_targetObject && [_targetObject class] != _targetObject) || _targetClass;
 }
 
 - (NSComparisonResult)compareSpecificity:(TTURLPattern*)pattern2 {
@@ -389,11 +437,13 @@ static TTURLArgumentType TTURLArgumentTypeForProperty(Class cls, NSString* prope
   }
 
   if (parts.count) {
-    [self makeSelectorWithNames:parts];
+    [self setSelectorWithNames:parts];
     if (!_selector) {
       [parts addObject:@"query"];
-      [self makeSelectorWithNames:parts];
+      [self setSelectorWithNames:parts];
     }
+  } else {
+    [self setSelectorIfPossible:@selector(initWithNavigatorURL:query:)];
   }
 }
 
@@ -413,8 +463,10 @@ static TTURLArgumentType TTURLArgumentTypeForProperty(Class cls, NSString* prope
 }
 
 - (void)analyzeMethod {
-  Class cls = [self realTargetClass];
-  Method method = class_getInstanceMethod(cls, _selector);
+  Class cls = [self classForInvocation];
+  Method method = [self callsInstanceMethod]
+    ? class_getInstanceMethod(cls, _selector)
+    : class_getClassMethod(cls, _selector);
   if (method) {
     _argumentCount = method_getNumberOfArguments(method)-2;
 
@@ -443,7 +495,7 @@ static TTURLArgumentType TTURLArgumentTypeForProperty(Class cls, NSString* prope
 }
 
 - (void)analyzeProperties {
-  Class cls = [self realTargetClass];
+  Class cls = [self classForInvocation];
   
   for (id<TTURLPatternText> pattern in _path) {
     if ([pattern isKindOfClass:[TTURLWildcard class]]) {
@@ -552,11 +604,20 @@ static TTURLArgumentType TTURLArgumentTypeForProperty(Class cls, NSString* prope
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // NSObject
 
-- (id)initWithMode:(TTNavigationMode)navigationMode target:(id)target {
-  if (self = [self init]) {
-    _navigationMode = navigationMode;
+- (id)initWithTarget:(id)target {
+  return [self initWithTarget:target mode:TTNavigationModeNone];
+}
 
-    if ([target class] == target) {
+- (id)initWithTarget:(id)target mode:(TTNavigationMode)navigationMode {
+  if (self = [super init]) {
+    _targetClass = nil;
+    _targetObject = nil;
+    _navigationMode = navigationMode;
+    _parentURL = nil;
+    _transition = 0;
+    _argumentCount = 0;
+
+    if ([target class] == target && navigationMode) {
       _targetClass = target;
     } else {
       _targetObject = target;
@@ -566,39 +627,23 @@ static TTURLArgumentType TTURLArgumentTypeForProperty(Class cls, NSString* prope
 }
 
 - (id)init {
-  if (self = [super init]) {
-    _navigationMode = TTNavigationModeNone;
-    _scheme = nil;
-    _path = [[NSMutableArray alloc] init];
-    _query = nil;
-    _fragment = nil;
-    _selector = nil;
-    _targetObject = nil;
-    _targetClass = nil;
-    _transition = 0;
-    _argumentCount = 0;
-    _specificity = 0;
-  }
-  return self;
+  return [self initWithTarget:nil];
 }
 
 - (void)dealloc {
-  TT_RELEASE_SAFELY(_URL);
   TT_RELEASE_SAFELY(_parentURL);
-  TT_RELEASE_SAFELY(_scheme);
-  TT_RELEASE_SAFELY(_path);
-  TT_RELEASE_SAFELY(_query);
-  TT_RELEASE_SAFELY(_fragment);
   [super dealloc];
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-// public
+// TTURLPattern
 
-- (void)setURL:(NSString*)URL {
-  [_URL release];
-  _URL = [URL retain];
+- (Class)classForInvocation {
+  return _targetClass ? _targetClass : [_targetObject class];
 }
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// public
 
 - (BOOL)isUniversal {
   return [_URL isEqualToString:kUniversalURLPattern];
@@ -608,9 +653,13 @@ static TTURLArgumentType TTURLArgumentTypeForProperty(Class cls, NSString* prope
   return [_URL rangeOfString:@"#" options:NSBackwardsSearch].location != NSNotFound;
 }
 
-- (void)compileForObject {
-  if (![_URL isEqualToString:kUniversalURLPattern]) {
-    [self compileURL:[NSURL URLWithString:_URL]];
+- (void)compile {
+  if ([_URL isEqualToString:kUniversalURLPattern]) {
+    if (!_selector) {
+      [self deduceSelector];
+    }
+  } else {
+    [self compileURL];
     
     // XXXjoe Don't do this if the pattern is a URL generator
     if (!_selector) {
@@ -622,13 +671,8 @@ static TTURLArgumentType TTURLArgumentTypeForProperty(Class cls, NSString* prope
   }
 }
 
-- (void)compileForString {
-  [self compileURL:[NSURL URLWithString:_URL]];
-  [self analyzeProperties];
-}
-
 - (BOOL)matchURL:(NSURL*)URL {
-  if (URL.scheme && (![_scheme isEqualToString:URL.scheme] || !URL.host)) {
+  if (!URL.scheme || !URL.host || ![_scheme isEqualToString:URL.scheme]) {
     return NO;
   }
 
@@ -707,6 +751,60 @@ static TTURLArgumentType TTURLArgumentTypeForProperty(Class cls, NSString* prope
   return returnValue;
 }
 
+@end
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+@implementation TTURLGeneratorPattern
+
+@synthesize targetClass = _targetClass;
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// NSObject
+
+- (id)initWithTargetClass:(id)targetClass {
+  if (self = [super init]) {
+    _targetClass = targetClass;
+  }
+  return self;
+}
+
+- (id)init {
+  return [self initWithTargetClass:nil];
+}
+
+- (void)dealloc {
+  [super dealloc];
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// TTURLPattern
+
+- (Class)classForInvocation {
+  return _targetClass;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// public
+
+- (void)compile {
+  [self compileURL];
+
+  for (id<TTURLPatternText> pattern in _path) {
+    if ([pattern isKindOfClass:[TTURLWildcard class]]) {
+      TTURLWildcard* wildcard = (TTURLWildcard*)pattern;
+      [wildcard deduceSelectorForClass:_targetClass];
+    }
+  }
+
+  for (id<TTURLPatternText> pattern in [_query objectEnumerator]) {
+    if ([pattern isKindOfClass:[TTURLWildcard class]]) {
+      TTURLWildcard* wildcard = (TTURLWildcard*)pattern;
+      [wildcard deduceSelectorForClass:_targetClass];
+    }
+  }
+}
+
 - (NSString*)generateURLFromObject:(id)object {
   NSMutableArray* paths = [NSMutableArray array];
   NSMutableArray* queries = nil;
@@ -737,4 +835,3 @@ static TTURLArgumentType TTURLArgumentTypeForProperty(Class cls, NSString* prope
 }
 
 @end
-

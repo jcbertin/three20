@@ -4,20 +4,24 @@
 @interface UIViewController (TTCategory)
 
 /**
- * The URL that was used to load this controller through TTNavigator.
+ * The default initializer sent to view controllers opened through TTNavigator.
  */
-@property(nonatomic,copy) NSString* navigatorURL;
+- (id)initWithNavigatorURL:(NSURL*)URL query:(NSDictionary*)query;
 
 /**
- * A temporary holding place for persisted view state waiting to be restored.
- *
- * While restoring controllers, TTURLMap will assign this the dictionary created by persistView.
- * Ultimately, this state is bound for the restoreView call, but it is up to subclasses to
- * call restoreView at the appropriate time -- usually after the view has been created.
- *
- * After you've restored the state, you should set frozenState to nil.
+ * The current URL that this view controller represents.
  */
-@property(nonatomic,retain) NSDictionary* frozenState;
+@property(nonatomic,readonly) NSString* navigatorURL;
+
+/**
+ * The URL that was used to load this controller through TTNavigator.
+ *
+ * Do not ever change the value of this property.  TTNavigator will assign this
+ * when creating your view controller, and it expects it to remain constant throughout
+ * the view controller's life.  You can override navigatorURL if you want to specify
+ * a different URL for your view controller to use when persisting and restoring it.
+ */
+@property(nonatomic,copy) NSString* originalNavigatorURL;
 
 /**
  * Determines whether a controller is primarily a container of other controllers.
@@ -84,23 +88,6 @@
 - (void)bringControllerToFront:(UIViewController*)controller animated:(BOOL)animated;
 
 /**
- * Persists aspects of the view state to a dictionary that can later be used to restore it.
- *
- * This will be called when TTNavigator is persisting the navigation history so that it
- * can later be restored.  This usually happens when the app quits, or when there is a low
- * memory warning.
- */
-- (void)persistView:(NSMutableDictionary*)state;
-
-/**
- * Restores aspects of the view state from a dictionary populated by persistView.
- *
- * This will be called when TTNavigator is restoring the navigation history.  This may 
- * happen after launch, or when the controller appears again after a low memory warning.
- */
-- (void)restoreView:(NSDictionary*)state;
-
-/**
  * Gets a key that can be used to identify a subcontroller in subcontrollerForKey.
  */
 - (NSString*)keyForSubcontroller:(UIViewController*)controller;
@@ -111,26 +98,34 @@
 - (UIViewController*)subcontrollerForKey:(NSString*)key;
 
 /**
+ * Persists aspects of the view state to a dictionary that can later be used to restore it.
+ *
+ * This will be called when TTNavigator is persisting the navigation history so that it
+ * can later be restored.  This usually happens when the app quits, or when there is a low
+ * memory warning.
+ */
+- (BOOL)persistView:(NSMutableDictionary*)state;
+
+/**
+ * Restores aspects of the view state from a dictionary populated by persistView.
+ *
+ * This will be called when TTNavigator is restoring the navigation history.  This may 
+ * happen after launch, or when the controller appears again after a low memory warning.
+ */
+- (void)restoreView:(NSDictionary*)state;
+
+/**
  * XXXjoe Not documenting this in the hopes that I can eliminate it ;)
  */
 - (void)persistNavigationPath:(NSMutableArray*)path;
 
 /**
- * Shows a UIAlertView with a message and title.
+ * Finishes initializing the controller after a TTNavigator-coordinated delay.
  *
- * @delegate A UIAlertView delegate
- */ 
-- (void)alert:(NSString*)message title:(NSString*)title delegate:(id)delegate;
-
-/**
- * Shows a UIAlertView with a message.
- */ 
-- (void)alert:(NSString*)message;
-
-/**
- * Shows a UIAlertView with an error message.
- */ 
-- (void)alertError:(NSString*)message;
+ * If the controller was created in between calls to TTNavigator beginDelay and endDelay, then
+ * this will be called after endDelay.
+ */
+- (void)delayDidEnd;
 
 /**
  * Shows or hides the navigation and status bars.
@@ -141,5 +136,16 @@
  * Shortcut for its animated-optional cousin.
  */
 - (void)dismissModalViewController;
+
+/**
+ * A temporary holding place for persisted view state waiting to be restored.
+ *
+ * While restoring controllers, TTURLMap will assign this the dictionary created by persistView.
+ * Ultimately, this state is bound for the restoreView call, but it is up to subclasses to
+ * call restoreView at the appropriate time -- usually after the view has been created.
+ *
+ * After you've restored the state, you should set frozenState to nil.
+ */
+@property(nonatomic,retain) NSDictionary* frozenState;
 
 @end

@@ -28,7 +28,7 @@ static const NSTimeInterval kPauseInterval = 0.4;
 }
 
 - (void)restartPauseTimer {
-  TT_RELEASE_TIMER(_pauseTimer);
+  TT_INVALIDATE_TIMER(_pauseTimer);
   _pauseTimer = [NSTimer scheduledTimerWithTimeInterval:kPauseInterval target:self
                          selector:@selector(searchAfterPause) userInfo:nil repeats:NO];
 }
@@ -54,7 +54,7 @@ static const NSTimeInterval kPauseInterval = 0.4;
 }
 
 - (void)dealloc {
-  TT_RELEASE_TIMER(_pauseTimer);
+  TT_INVALIDATE_TIMER(_pauseTimer);
   TT_RELEASE_SAFELY(_searchResultsDelegate2);
   TT_RELEASE_SAFELY(_searchResultsViewController);
   [super dealloc];
@@ -63,14 +63,49 @@ static const NSTimeInterval kPauseInterval = 0.4;
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // UISearchDisplayDelegate
 
+- (void)searchDisplayControllerWillBeginSearch:(UISearchDisplayController*)controller {
+  UIView* backgroundView = [self.searchBar viewWithTag:TT_SEARCH_BAR_BACKGROUND_TAG];
+  if (backgroundView) {
+    [UIView beginAnimations:nil context:nil];
+    [UIView setAnimationDuration:TT_FAST_TRANSITION_DURATION];
+    backgroundView.alpha = 0;
+    [UIView commitAnimations];
+  }
+  if (!self.searchContentsController.navigationController) {
+    [UIView beginAnimations:nil context:nil];
+    self.searchBar.superview.top -= self.searchBar.screenY - TTStatusHeight();
+    [UIView commitAnimations];
+  }
+}
+
+- (void)searchDisplayControllerDidBeginSearch:(UISearchDisplayController*)controller {
+  [_searchResultsViewController updateView];
+}
+
+- (void)searchDisplayControllerWillEndSearch:(UISearchDisplayController*)controller {
+  UIView* backgroundView = [self.searchBar viewWithTag:TT_SEARCH_BAR_BACKGROUND_TAG];
+  if (backgroundView) {
+    [UIView beginAnimations:nil context:nil];
+    [UIView setAnimationDuration:TT_FAST_TRANSITION_DURATION];
+    backgroundView.alpha = 1;
+    [UIView commitAnimations];
+  }
+
+  if (!self.searchContentsController.navigationController) {
+    [UIView beginAnimations:nil context:nil];
+    self.searchBar.superview.top += self.searchBar.top - TTStatusHeight();
+    [UIView commitAnimations];
+  }
+}
+ 
 - (void)searchDisplayControllerDidEndSearch:(UISearchDisplayController*)controller {
   [self resetResults];
 }
- 
+
 - (void)searchDisplayController:(UISearchDisplayController *)controller
         didLoadSearchResultsTableView:(UITableView *)tableView {
 }
-
+ 
 - (void)searchDisplayController:(UISearchDisplayController *)controller
         willUnloadSearchResultsTableView:(UITableView *)tableView {
 }
@@ -91,11 +126,6 @@ static const NSTimeInterval kPauseInterval = 0.4;
         shouldReloadTableForSearchString:(NSString*)searchString {
   if (_pausesBeforeSearching) {
     [self restartPauseTimer];
-//    if (_searchResultsViewController.modelState & TTModelStateLoaded) {
-//      _searchResultsViewController.modelState = TTModelStateLoaded | TTModelStateReloading;
-//    } else {
-//      _searchResultsViewController.modelState = TTModelStateLoading;
-//    }
   } else {
     [_searchResultsViewController.dataSource search:searchString];
   }
@@ -104,7 +134,7 @@ static const NSTimeInterval kPauseInterval = 0.4;
 
 - (BOOL)searchDisplayController:(UISearchDisplayController*)controller
         shouldReloadTableForSearchScope:(NSInteger)searchOption {
-  // XXXjoe Need a way to communicate scope change to the data source
+  [_searchResultsViewController invalidateModel];
   [_searchResultsViewController.dataSource search:self.searchBar.text];
   return NO;
 }

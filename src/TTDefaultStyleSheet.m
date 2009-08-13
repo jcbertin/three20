@@ -84,6 +84,14 @@
           font:nil];
 }
 
+- (TTStyle*)grayToolbarButton:(UIControlState)state {
+  return
+    [self toolbarButtonForState:state
+          shape:[TTRoundedRectangleShape shapeWithRadius:4.5]
+          tintColor:RGBCOLOR(40, 40, 40)
+          font:nil];
+}
+
 - (TTStyle*)blackToolbarForwardButton:(UIControlState)state {
   return
     [self toolbarButtonForState:state
@@ -120,6 +128,16 @@
     [TTFourBorderStyle styleWithTop:nil right:nil bottom:shadow left:nil width:1 next:nil]];
 }
 
+- (TTStyle*)blackSearchBar {
+  UIColor* highlight = [UIColor colorWithWhite:1 alpha:0.05];
+  UIColor* mid = [UIColor colorWithWhite:0.4 alpha:0.6];
+  UIColor* shadow = [UIColor colorWithWhite:0 alpha:0.8];
+  return
+    [TTLinearGradientFillStyle styleWithColor1:mid color2:shadow next:
+    [TTFourBorderStyle styleWithTop:nil right:nil bottom:shadow left:nil width:1 next:
+    [TTFourBorderStyle styleWithTop:nil right:nil bottom:highlight left:nil width:1 next:nil]]];
+}
+
 - (TTStyle*)searchBarBottom {
   UIColor* color = TTSTYLEVAR(searchBarTintColor);
   UIColor* highlight = [color multiplyHue:0 saturation:0 value:1.2];
@@ -130,8 +148,10 @@
 }
 
 - (TTStyle*)tableHeader {
+  UIColor* color = TTSTYLEVAR(tableHeaderTintColor);
+  UIColor* highlight = [color multiplyHue:0 saturation:0 value:1.1];
   return
-    [TTReflectiveFillStyle styleWithColor:self.tableHeaderTintColor next:
+    [TTLinearGradientFillStyle styleWithColor1:highlight color2:color next:
     [TTInsetStyle styleWithInset:UIEdgeInsetsMake(-1, 0, 0, 0) next:
     [TTFourBorderStyle styleWithTop:nil right:nil bottom:RGBACOLOR(0,0,0,0.15)
                        left:nil width:1 next:nil]]];
@@ -154,9 +174,8 @@
      [TTInsetStyle styleWithInset:UIEdgeInsetsMake(1, 1, 1, 1) next:
      [TTLinearGradientFillStyle styleWithColor1:RGBCOLOR(221, 231, 248)
                                 color2:RGBACOLOR(188, 206, 241, 1) next:
-     [TTFourBorderStyle styleWithTop:RGBCOLOR(161, 187, 283)
-                        right:RGBCOLOR(118, 130, 214) bottom:RGBCOLOR(118, 130, 214)
-                        left:RGBCOLOR(161, 187, 283) width:1 next:nil]]]];
+     [TTLinearGradientBorderStyle styleWithColor1:RGBCOLOR(161, 187, 283)
+                        color2:RGBCOLOR(118, 130, 214) width:1 next:nil]]]];
   }
 }
 
@@ -181,15 +200,23 @@
     [TTSolidBorderStyle styleWithColor:RGBCOLOR(178, 178, 178) width:1 next:nil]]];
 }
 
+- (TTStyle*)blackBanner {
+  return
+    [TTSolidFillStyle styleWithColor:RGBACOLOR(0, 0, 0, 0.5) next:
+    [TTFourBorderStyle styleWithTop:RGBCOLOR(0, 0, 0) right:nil bottom:nil left: nil width:1 next:
+    [TTFourBorderStyle styleWithTop:[UIColor colorWithWhite:1 alpha:0.2] right:nil bottom:nil
+                       left: nil width:1 next:nil]]];
+}
+
 - (TTStyle*)badgeWithFontSize:(CGFloat)fontSize {
   return
     [TTShapeStyle styleWithShape:[TTRoundedRectangleShape shapeWithRadius:TT_ROUNDED] next:
     [TTInsetStyle styleWithInset:UIEdgeInsetsMake(1, 1, 1, 1) next:
-    [TTShadowStyle styleWithColor:RGBACOLOR(0,0,0,1) blur:3 offset:CGSizeMake(0, 4) next:
+    [TTShadowStyle styleWithColor:RGBACOLOR(0,0,0,0.8) blur:3 offset:CGSizeMake(0, 4) next:
     [TTReflectiveFillStyle styleWithColor:RGBCOLOR(221, 17, 27) next:
     [TTInsetStyle styleWithInset:UIEdgeInsetsMake(-1, -1, -1, -1) next:
     [TTSolidBorderStyle styleWithColor:[UIColor whiteColor] width:2 next:
-    [TTBoxStyle styleWithPadding:UIEdgeInsetsMake(2, 7, 2, 7) next:
+    [TTBoxStyle styleWithPadding:UIEdgeInsetsMake(1, 7, 2, 7) next:
     [TTTextStyle styleWithFont:[UIFont boldSystemFontOfSize:fontSize]
                  color:[UIColor whiteColor] next:nil]]]]]]]];
 }
@@ -200,6 +227,10 @@
 
 - (TTStyle*)badge {
   return [self badgeWithFontSize:15];
+}
+
+- (TTStyle*)largeBadge {
+  return [self badgeWithFontSize:17];
 }
 
 - (TTStyle*)tabBar {
@@ -370,6 +401,41 @@
     [TTContentStyle styleWithNext:nil]];
 }
 
+- (TTStyle*)postTextEditor {
+  return
+    [TTShapeStyle styleWithShape:[TTRoundedRectangleShape shapeWithRadius:15] next:
+    [TTSolidFillStyle styleWithColor:[UIColor whiteColor] next:nil]];
+}
+
+- (TTStyle*)photoCaption {
+  return
+    [TTSolidFillStyle styleWithColor:[UIColor colorWithWhite:0 alpha:0.5] next:
+    [TTFourBorderStyle styleWithTop:RGBACOLOR(0, 0, 0, 0.5) width:1 next:
+    [TTBoxStyle styleWithPadding:UIEdgeInsetsMake(8, 8, 8, 8) next:
+    [TTTextStyle styleWithFont:TTSTYLEVAR(photoCaptionFont) color:TTSTYLEVAR(photoCaptionTextColor)
+                 minimumFontSize:0 shadowColor:[UIColor colorWithWhite:0 alpha:0.9]
+                 shadowOffset:CGSizeMake(0, 1) textAlignment:UITextAlignmentCenter
+                 verticalAlignment:UIControlContentVerticalAlignmentCenter
+                 lineBreakMode:UILineBreakModeTailTruncation numberOfLines:6 next:nil]]]];
+}
+
+- (TTStyle*)photoStatusLabel {
+  return
+    [TTSolidFillStyle styleWithColor:[UIColor colorWithWhite:0 alpha:0.5] next:
+    [TTBoxStyle styleWithPadding:UIEdgeInsetsMake(20, 8, 20, 8) next:
+    [TTTextStyle styleWithFont:TTSTYLEVAR(tableFont) color:RGBCOLOR(200, 200, 200)
+                 minimumFontSize:0 shadowColor:[UIColor colorWithWhite:0 alpha:0.9]
+                 shadowOffset:CGSizeMake(0, -1) next:nil]]];
+}
+
+- (TTStyle*)pageDot:(UIControlState)state {
+  if (state == UIControlStateSelected) {
+    return [self pageDotWithColor:[UIColor whiteColor]];
+  } else {
+    return [self pageDotWithColor:RGBCOLOR(77, 77, 77)];
+  }
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // public colors
 
@@ -395,6 +461,10 @@
 
 - (UIColor*)moreLinkTextColor {
   return RGBCOLOR(36, 112, 216);
+}
+
+- (UIColor*)selectedTextColor {
+  return [UIColor whiteColor];
 }
 
 - (UIColor*)photoCaptionTextColor {
@@ -426,11 +496,11 @@
 }
 
 - (UIColor*)tableErrorTextColor {
-  return RGBCOLOR(99, 109, 125);
+  return RGBCOLOR(96, 103, 111);
 }
 
 - (UIColor*)tableSubTextColor {
-  return RGBCOLOR(99, 109, 125);
+  return RGBCOLOR(79, 89, 105);
 }
 
 - (UIColor*)tableTitleTextColor {
@@ -458,7 +528,7 @@
 }
 
 - (UIColor*)tableGroupedBackgroundColor {
-  return nil;
+  return [UIColor groupTableViewBackgroundColor];
 }
 
 - (UIColor*)searchTableBackgroundColor {
@@ -524,12 +594,16 @@
   return [UIFont systemFontOfSize:17];
 }
 
-- (UIFont*)tableBannerFont {
-  return [UIFont boldSystemFontOfSize:12];
+- (UIFont*)tableHeaderPlainFont {
+  return [UIFont boldSystemFontOfSize:16];
+}
+
+- (UIFont*)tableHeaderGroupedFont {
+  return [UIFont boldSystemFontOfSize:18];
 }
 
 - (UIFont*)photoCaptionFont {
-  return [UIFont boldSystemFontOfSize:13];
+  return [UIFont boldSystemFontOfSize:12];
 }
 
 - (UIFont*)messageFont {
@@ -541,11 +615,15 @@
 }
 
 - (UIFont*)errorSubtitleFont {
-  return [UIFont boldSystemFontOfSize:14];
+  return [UIFont boldSystemFontOfSize:12];
 }
 
 - (UIFont*)activityLabelFont {
   return [UIFont systemFontOfSize:17];
+}
+
+- (UIFont*)activityBannerFont {
+  return [UIFont boldSystemFontOfSize:11];
 }
 
 - (UITableViewCellSelectionStyle)tableSelectionStyle {
@@ -584,6 +662,11 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // public
 
+- (TTStyle*)selectionFillStyle:(TTStyle*)next {
+  return [TTLinearGradientFillStyle styleWithColor1:RGBCOLOR(5,140,245)
+                                    color2:RGBCOLOR(1,93,230) next:next];
+}
+
 - (TTStyle*)toolbarButtonForState:(UIControlState)state shape:(TTShape*)shape
             tintColor:(UIColor*)tintColor font:(UIFont*)font {
   UIColor* stateTintColor = [self toolbarButtonColorWithTintColor:tintColor forState:state];
@@ -592,7 +675,7 @@
   return 
     [TTShapeStyle styleWithShape:shape next:
     [TTInsetStyle styleWithInset:UIEdgeInsetsMake(2, 0, 1, 0) next:
-    [TTShadowStyle styleWithColor:RGBACOLOR(255,255,255,0.25) blur:0 offset:CGSizeMake(0, 1) next:
+    [TTShadowStyle styleWithColor:RGBACOLOR(255,255,255,0.18) blur:0 offset:CGSizeMake(0, 1) next:
     [TTReflectiveFillStyle styleWithColor:stateTintColor next:
     [TTBevelBorderStyle styleWithHighlight:[stateTintColor multiplyHue:1 saturation:0.9 value:0.7]
                         shadow:[stateTintColor multiplyHue:1 saturation:0.5 value:0.6]
@@ -608,9 +691,12 @@
                  shadowOffset:CGSizeMake(0, -1) next:nil]]]]]]]]]];
 }
 
-- (TTStyle*)selectionFillStyle:(TTStyle*)next {
-  return [TTLinearGradientFillStyle styleWithColor1:RGBCOLOR(5,140,245)
-                                    color2:RGBCOLOR(1,93,230) next:next];
+- (TTStyle*)pageDotWithColor:(UIColor*)color {
+  return
+    [TTBoxStyle styleWithMargin:UIEdgeInsetsMake(0,0,0,10) padding:UIEdgeInsetsMake(6,6,0,0) next:
+    [TTShapeStyle styleWithShape:[TTRoundedRectangleShape shapeWithRadius:2.5] next:
+    [TTSolidFillStyle styleWithColor:color next:nil]]];
 }
+
 
 @end

@@ -1,7 +1,9 @@
 #import "Three20/TTViewController.h"
+#import "Three20/TTTableViewController.h"
 #import "Three20/TTURLRequestQueue.h"
-#import "Three20/TTStyleSheet.h"
 #import "Three20/TTSearchDisplayController.h"
+#import "Three20/TTStyleSheet.h"
+#import "Three20/TTNavigator.h"
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -77,7 +79,7 @@
 // NSObject
 
 - (id)init {
-  if (self = [super init]) {  
+  if (self = [super init]) {
     _frozenState = nil;
     _navigationBarStyle = UIBarStyleDefault;
     _navigationBarTintColor = nil;
@@ -115,12 +117,22 @@
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
+// UIResponder
+
+- (void)motionBegan:(UIEventSubtype)motion withEvent:(UIEvent *)event {
+  if (event.type == UIEventSubtypeMotionShake && [TTNavigator navigator].supportsShakeToReload) {
+    [[TTNavigator navigator] reload];
+  }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
 // UIViewController
 
 - (void)loadView {
   [super loadView];
   
-  self.view = [[[UIView alloc] initWithFrame:TTNavigationFrame()] autorelease];
+  CGRect frame = self.wantsFullScreenLayout ? TTScreenBounds() : TTNavigationFrame(); 
+  self.view = [[[UIView alloc] initWithFrame:frame] autorelease];
 	self.view.autoresizesSubviews = YES;
 	self.view.autoresizingMask = UIViewAutoresizingFlexibleWidth
                               | UIViewAutoresizingFlexibleHeight;
@@ -133,6 +145,7 @@
 }
 
 - (void)viewWillAppear:(BOOL)animated {
+  [super viewWillAppear:animated];
   _isViewAppearing = YES;
   _hasViewAppeared = YES;
 
@@ -154,10 +167,12 @@
 }
 
 - (void)viewDidAppear:(BOOL)animated {
+  [super viewDidAppear:animated];
   [TTURLRequestQueue mainQueue].suspended = NO;
 }
 
 - (void)viewWillDisappear:(BOOL)animated {
+  [super viewWillDisappear:animated];
   _isViewAppearing = NO;
 }
 
@@ -173,6 +188,8 @@
     [super didReceiveMemoryWarning];
 
     _hasViewAppeared = NO;
+  } else {
+    [super didReceiveMemoryWarning];
   }
 }
 
@@ -220,6 +237,7 @@
                                                              contentsController:self];
     }
     
+    searchViewController.superController = self;
     _searchController.searchResultsViewController = searchViewController;
   } else {
     _searchController.searchResultsViewController = nil;

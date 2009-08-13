@@ -12,7 +12,7 @@ static const CGFloat kCancelHighlightThreshold = 4;
 
 @implementation TTTableView
 
-@synthesize highlightedLabel = _highlightedLabel;
+@synthesize highlightedLabel = _highlightedLabel, contentOrigin = _contentOrigin;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // NSObject
@@ -21,6 +21,7 @@ static const CGFloat kCancelHighlightThreshold = 4;
   if (self = [super initWithFrame:frame style:style]) {
     _highlightedLabel = nil;
     _highlightStartPoint = CGPointZero;
+    _contentOrigin = 0;
   }
   return self;
 }
@@ -65,7 +66,49 @@ static const CGFloat kCancelHighlightThreshold = 4;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
+// UIScrollView
+
+- (void)setContentSize:(CGSize)size {
+  if (_contentOrigin) {
+    CGFloat minHeight = self.height + _contentOrigin;
+    if (size.height < minHeight) {
+      size.height = self.height + _contentOrigin;
+    }
+  }
+
+  CGFloat y = self.contentOffset.y;
+  [super setContentSize:size];
+
+  if (_contentOrigin) {
+    // As described below in setContentOffset, UITableView insists on messing with the 
+    // content offset sometimes when you change the content size or the height of the table
+    self.contentOffset = CGPointMake(0, y);
+  }
+}
+
+- (void)setContentOffset:(CGPoint)point {
+  // UITableView (and UIScrollView) are really stupid about resetting the content offset
+  // when the table view itself is resized.  There are times when I scroll to a point and then
+  // disable scrolling, and I don't want the table view scrolling somewhere else just because
+  // it was resized.  
+  if (self.scrollEnabled) {
+    if (!(_contentOrigin && self.contentOffset.y == _contentOrigin && point.y == 0)) {
+      [super setContentOffset:point];
+    }
+  }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
 // UITableView
+
+- (void)reloadData {
+  CGFloat y = self.contentOffset.y;
+  [super reloadData];
+
+  if (_contentOrigin) {
+    self.contentOffset = CGPointMake(0, y);
+  }
+}
 
 - (void)selectRowAtIndexPath:(NSIndexPath *)indexPath animated:(BOOL)animated
         scrollPosition:(UITableViewScrollPosition)scrollPosition {

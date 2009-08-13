@@ -8,6 +8,7 @@
 #import "Three20/TTTableViewDelegate.h"
 #import "Three20/TTSearchDisplayController.h"
 #import "Three20/TTDefaultStyleSheet.h"
+#import "Three20/TTNavigator.h"
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // global
@@ -19,11 +20,21 @@ static const CGFloat kBannerViewHeight = 22;
 @implementation TTTableViewController
 
 @synthesize tableView = _tableView, tableBannerView = _tableBannerView,
-            tableOverlayView = _tableOverlayView, dataSource = _dataSource,
-            tableViewStyle = _tableViewStyle, variableHeightRows = _variableHeightRows;
+            tableOverlayView = _tableOverlayView,
+            loadingView = _loadingView, errorView= _errorView, emptyView = _emptyView,
+            dataSource = _dataSource, tableViewStyle = _tableViewStyle,
+            variableHeightRows = _variableHeightRows;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // private
+
+- (void)createInterstitialModel {
+  self.dataSource = [[[TTTableViewInterstialDataSource alloc] init] autorelease];
+}
+
+- (NSString*)defaultTitleForLoading {
+  return TTLocalizedString(@"Loading...", @"");
+}
 
 - (void)updateTableDelegate {
   if (!_tableView.delegate) {
@@ -36,23 +47,29 @@ static const CGFloat kBannerViewHeight = 22;
   }
 }
 
-- (void)addSubviewOverTableView:(UIView*)view {
-  NSInteger tableIndex = [_tableView.superview.subviews indexOfObject:_tableView];
-  if (tableIndex != NSNotFound) {
-    view.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-    [_tableView.superview insertSubview:view atIndex:tableIndex+1];
+- (void)addToOverlayView:(UIView*)view {
+  if (!_tableOverlayView) {
+    CGRect frame = [self rectForOverlayView];
+    _tableOverlayView = [[UIView alloc] initWithFrame:frame];
+    _tableOverlayView.autoresizesSubviews = YES;
+    _tableOverlayView.autoresizingMask = UIViewAutoresizingFlexibleWidth
+                                        | UIViewAutoresizingFlexibleBottomMargin;
+    NSInteger tableIndex = [_tableView.superview.subviews indexOfObject:_tableView];
+    if (tableIndex != NSNotFound) {
+      [_tableView.superview addSubview:_tableOverlayView];
+    }
   }
+
+  view.frame = _tableOverlayView.bounds;
+  view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+  [_tableOverlayView addSubview:view];
 }
 
-- (void)showReloadingViewWithDelay {
-  [_bannerTimer invalidate];
-  _bannerTimer = [NSTimer scheduledTimerWithTimeInterval:0.3 target:self
-                          selector:@selector(showBanner) userInfo:nil repeats:NO];
-}
-
-- (void)showBanner {
-  _bannerTimer = nil;
-  [self showReloadingView];
+- (void)resetOverlayView {
+  if (_tableOverlayView && !_tableOverlayView.subviews.count) {
+    [_tableOverlayView removeFromSuperview];
+    TT_RELEASE_SAFELY(_tableOverlayView);
+  }
 }
 
 - (void)layoutOverlayView {
@@ -98,6 +115,9 @@ static const CGFloat kBannerViewHeight = 22;
     _tableView = nil;
     _tableBannerView = nil;
     _tableOverlayView = nil;
+    _loadingView = nil;
+    _errorView = nil;
+    _emptyView = nil;
     _menuView = nil;
     _menuCell = nil;
     _dataSource = nil;
@@ -114,9 +134,16 @@ static const CGFloat kBannerViewHeight = 22;
 }
 
 - (void)dealloc {
+  _tableView.delegate = nil;
+  _tableView.dataSource = nil;
   TT_RELEASE_SAFELY(_tableDelegate);
   TT_RELEASE_SAFELY(_dataSource);
   TT_RELEASE_SAFELY(_tableView);
+  TT_RELEASE_SAFELY(_loadingView);
+  TT_RELEASE_SAFELY(_errorView);
+  TT_RELEASE_SAFELY(_emptyView);
+  TT_RELEASE_SAFELY(_tableOverlayView);
+  TT_RELEASE_SAFELY(_tableBannerView);
   [super dealloc];
 }
 
@@ -130,12 +157,20 @@ static const CGFloat kBannerViewHeight = 22;
 
 - (void)viewDidUnload {
   [super viewDidUnload];
-  TT_RELEASE_SAFELY(_dataSource);
+  _tableView.delegate = nil;
+  _tableView.dataSource = nil;
+  TT_RELEASE_SAFELY(_tableDelegate);
   TT_RELEASE_SAFELY(_tableView);
   [_tableBannerView removeFromSuperview];
   TT_RELEASE_SAFELY(_tableBannerView);
   [_tableOverlayView removeFromSuperview];
   TT_RELEASE_SAFELY(_tableOverlayView);
+  [_loadingView removeFromSuperview];
+  TT_RELEASE_SAFELY(_loadingView);
+  [_errorView removeFromSuperview];
+  TT_RELEASE_SAFELY(_errorView);
+  [_emptyView removeFromSuperview];
+  TT_RELEASE_SAFELY(_emptyView);
   [_menuView removeFromSuperview];
   TT_RELEASE_SAFELY(_menuView);
   [_menuCell removeFromSuperview];
@@ -153,17 +188,35 @@ static const CGFloat kBannerViewHeight = 22;
   }
 }  
 
+- (void)viewWillDisappear:(BOOL)animated {
+  [super viewWillDisappear:animated];
+  [self hideMenu:YES];
+}
+
+- (void)setEditing:(BOOL)editing animated:(BOOL)animated {
+  [super setEditing:editing animated:animated];
+  [self.tableView setEditing:editing animated:animated];
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // UTViewController (TTCategory)
 
-- (void)persistView:(NSMutableDictionary*)state {
+- (BOOL)persistView:(NSMutableDictionary*)state {
   CGFloat scrollY = _tableView.contentOffset.y;
   [state setObject:[NSNumber numberWithFloat:scrollY] forKey:@"scrollOffsetY"];
+  return [super persistView:state];
 }
 
 - (void)restoreView:(NSDictionary*)state {
-  NSNumber* scrollY = [state objectForKey:@"scrollOffsetY"];
-  _tableView.contentOffset = CGPointMake(0, scrollY.floatValue);
+  CGFloat scrollY = [[state objectForKey:@"scrollOffsetY"] floatValue];
+  if (scrollY) {
+    CGFloat maxY = _tableView.contentSize.height - _tableView.height;
+    if (scrollY <= maxY) {
+      _tableView.contentOffset = CGPointMake(0, scrollY);
+    } else {
+      _tableView.contentOffset = CGPointMake(0, maxY);
+    }
+  }
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -180,31 +233,16 @@ static const CGFloat kBannerViewHeight = 22;
 - (void)keyboardWillDisappear:(BOOL)animated withBounds:(CGRect)bounds {
   [super keyboardWillDisappear:animated withBounds:bounds];
   self.tableView.frame = TTRectContract(self.tableView.frame, 0, -bounds.size.height);
+}
+
+- (void)keyboardDidDisappear:(BOOL)animated withBounds:(CGRect)bounds {
+  [super keyboardDidDisappear:animated withBounds:bounds];
   [self layoutOverlayView];
   [self layoutBannerView];
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // TTModelViewController
-
-- (BOOL)canShowModel {
-  if ([_dataSource respondsToSelector:@selector(numberOfSectionsInTableView:)]) {
-    NSInteger numberOfSections = [_dataSource numberOfSectionsInTableView:_tableView];
-    if (!numberOfSections) {
-      return NO;
-    } else if (numberOfSections == 1) {
-      return [_dataSource tableView:_tableView numberOfRowsInSection:0] > 0;
-    } else {
-      return YES;
-    }
-  } else {
-    return [_dataSource tableView:_tableView numberOfRowsInSection:0] > 0;
-  }
-}
-
-- (void)didLoadModel {
-  [_dataSource tableViewDidLoadModel:_tableView];
-}
 
 - (void)beginUpdates {
   [super beginUpdates];
@@ -213,22 +251,36 @@ static const CGFloat kBannerViewHeight = 22;
 
 - (void)endUpdates {
   [super endUpdates];
-  [_tableView beginUpdates];
+  [_tableView endUpdates];
 }
 
-- (void)showLoading:(BOOL)show {
-  if (show) {
-    if (!self.model.isLoaded) {
-      [self showLoadingView];
+- (BOOL)canShowModel {
+  if ([_dataSource respondsToSelector:@selector(numberOfSectionsInTableView:)]) {
+    NSInteger numberOfSections = [_dataSource numberOfSectionsInTableView:_tableView];
+    if (!numberOfSections) {
+      return NO;
+    } else if (numberOfSections == 1) {
+      NSInteger numberOfRows = [_dataSource tableView:_tableView numberOfRowsInSection:0];
+      return numberOfRows > 0;
+    } else {
+      return YES;
     }
   } else {
-    self.tableOverlayView = nil;
+    NSInteger numberOfRows = [_dataSource tableView:_tableView numberOfRowsInSection:0];
+    return numberOfRows > 0;
   }
-//  if (self.modelState & TTModelStateReloading) {
-//    [self showReloadingViewWithDelay];
-//  } else {
-//    self.tableBannerView = nil;
-//  }
+}
+
+- (void)didLoadModel:(BOOL)firstTime {
+  [super didLoadModel:firstTime];
+  [_dataSource tableViewDidLoadModel:_tableView];
+}
+
+- (void)didShowModel:(BOOL)firstTime {
+  [super didShowModel:firstTime];
+  if (firstTime) {
+    [_tableView flashScrollIndicators];
+  }
 }
 
 - (void)showModel:(BOOL)show {
@@ -242,56 +294,154 @@ static const CGFloat kBannerViewHeight = 22;
   [_tableView reloadData];
 }
 
+- (void)showLoading:(BOOL)show {
+  if (show) {
+    if (!self.model.isLoaded || ![self canShowModel]) {
+      NSString* title = _dataSource
+                        ? [_dataSource titleForLoading:NO]
+                        : [self defaultTitleForLoading];
+      if (title.length) {
+        TTActivityLabel* label = [[[TTActivityLabel alloc] initWithStyle:TTActivityLabelStyleWhiteBox]
+                                    autorelease];
+        label.text = title;
+        label.backgroundColor = _tableView.backgroundColor;
+        self.loadingView = label;
+      }
+    }
+  } else {
+    self.loadingView = nil;
+  }
+}
+
 - (void)showError:(BOOL)show {
   if (show) {
-    [self showErrorView];
+    if (!self.model.isLoaded || ![self canShowModel]) {
+      NSString* title = [_dataSource titleForError:_modelError];
+      NSString* subtitle = [_dataSource subtitleForError:_modelError];
+      UIImage* image = [_dataSource imageForError:_modelError];
+      if (title.length || subtitle.length || image) {
+        TTErrorView* errorView = [[[TTErrorView alloc] initWithTitle:title
+                                                       subtitle:subtitle
+                                                       image:image] autorelease];
+        errorView.backgroundColor = _tableView.backgroundColor;
+        self.errorView = errorView;
+      } else {
+        self.errorView = nil;
+      }
+      _tableView.dataSource = nil;
+      [_tableView reloadData];
+    }
   } else {
-    self.tableOverlayView = nil;
+    self.errorView = nil;
   }
 }
 
 - (void)showEmpty:(BOOL)show {
   if (show) {
-    [self showEmptyView];
+    NSString* title = [_dataSource titleForEmpty];
+    NSString* subtitle = [_dataSource subtitleForEmpty];
+    UIImage* image = [_dataSource imageForEmpty];
+    if (title.length || subtitle.length || image) {
+      TTErrorView* errorView = [[[TTErrorView alloc] initWithTitle:title
+                                                     subtitle:subtitle
+                                                     image:image] autorelease];
+      errorView.backgroundColor = _tableView.backgroundColor;
+      self.emptyView = errorView;
+    } else {
+      self.emptyView = nil;
+    }
+    _tableView.dataSource = nil;
+    [_tableView reloadData];
   } else {
-    self.tableOverlayView = nil;
+    self.emptyView = nil;
   }
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // TTModelDelegate
 
-- (void)model:(id<TTModel>)model didInsertObject:(id)object atIndexPath:(NSIndexPath*)indexPath {
+- (void)model:(id<TTModel>)model didUpdateObject:(id)object atIndexPath:(NSIndexPath*)indexPath {
   if (model == _model) {
-    if (_isViewAppearing) {
-      if ([_dataSource respondsToSelector:@selector(tableView:willInsertObject:atIndexPath:)]) {
-        NSIndexPath* newIndexPath = [_dataSource tableView:_tableView willInsertObject:object
+    if (_isViewAppearing && _flags.isShowingModel) {
+      if ([_dataSource respondsToSelector:@selector(tableView:willUpdateObject:atIndexPath:)]) {
+        NSIndexPath* newIndexPath = [_dataSource tableView:_tableView willUpdateObject:object
                                                  atIndexPath:indexPath];
-        TTLOG(@"FROM %@ TO %@", indexPath, newIndexPath);
         if (newIndexPath) {
-          [_tableView insertRowsAtIndexPaths:[NSArray arrayWithObject:newIndexPath]
-                      withRowAnimation:UITableViewRowAnimationTop];
+          if (newIndexPath.length == 1) {
+            TTLOG(@"UPDATING SECTION AT %@", newIndexPath);
+            NSInteger sectionIndex = [newIndexPath indexAtPosition:0];
+            [_tableView reloadSections:[NSIndexSet indexSetWithIndex:sectionIndex]
+                        withRowAnimation:UITableViewRowAnimationTop];
+          } else if (newIndexPath.length == 2) {
+            TTLOG(@"UPDATING ROW AT %@", newIndexPath);
+            [_tableView reloadRowsAtIndexPaths:[NSArray arrayWithObject:newIndexPath]
+                        withRowAnimation:UITableViewRowAnimationTop];
+          }
+          [self invalidateView];
+        } else {
+          [_tableView reloadData];
         }
       }
     } else {
-      [self invalidateView];
+      [self refresh];
+    }
+  }
+}
+
+- (void)model:(id<TTModel>)model didInsertObject:(id)object atIndexPath:(NSIndexPath*)indexPath {
+  if (model == _model) {
+    if (_isViewAppearing && _flags.isShowingModel) {
+      if ([_dataSource respondsToSelector:@selector(tableView:willInsertObject:atIndexPath:)]) {
+        NSIndexPath* newIndexPath = [_dataSource tableView:_tableView willInsertObject:object
+                                                 atIndexPath:indexPath];
+        if (newIndexPath) {
+          if (newIndexPath.length == 1) {
+            TTLOG(@"INSERTING SECTION AT %@", newIndexPath);
+            NSInteger sectionIndex = [newIndexPath indexAtPosition:0];
+            [_tableView insertSections:[NSIndexSet indexSetWithIndex:sectionIndex]
+                        withRowAnimation:UITableViewRowAnimationTop];
+          } else if (newIndexPath.length == 2) {
+            TTLOG(@"INSERTING ROW AT %@", newIndexPath);
+            [_tableView insertRowsAtIndexPaths:[NSArray arrayWithObject:newIndexPath]
+                        withRowAnimation:UITableViewRowAnimationTop];
+            [_tableView scrollToRowAtIndexPath:newIndexPath
+                        atScrollPosition:UITableViewScrollPositionBottom animated:NO];
+          }
+          [self invalidateView];
+        } else {
+          [_tableView reloadData];
+        }
+      }
+    } else {
+      [self refresh];
     }
   }
 }
 
 - (void)model:(id<TTModel>)model didDeleteObject:(id)object atIndexPath:(NSIndexPath*)indexPath {
   if (model == _model) {
-    if (_isViewAppearing) {
+    if (_isViewAppearing && _flags.isShowingModel) {
       if ([_dataSource respondsToSelector:@selector(tableView:willRemoveObject:atIndexPath:)]) {
         NSIndexPath* newIndexPath = [_dataSource tableView:_tableView willRemoveObject:object
                                                  atIndexPath:indexPath];
         if (newIndexPath) {
-          [_tableView deleteRowsAtIndexPaths:[NSArray arrayWithObject:newIndexPath]
-                      withRowAnimation:UITableViewRowAnimationTop];
+          if (newIndexPath.length == 1) {
+            TTLOG(@"DELETING SECTION AT %@", newIndexPath);
+            NSInteger sectionIndex = [newIndexPath indexAtPosition:0];
+            [_tableView deleteSections:[NSIndexSet indexSetWithIndex:sectionIndex]
+                        withRowAnimation:UITableViewRowAnimationTop];
+          } else if (newIndexPath.length == 2) {
+            TTLOG(@"DELETING ROW AT %@", newIndexPath);
+            [_tableView deleteRowsAtIndexPaths:[NSArray arrayWithObject:newIndexPath]
+                        withRowAnimation:UITableViewRowAnimationTop];
+          }
+          [self invalidateView];
+        } else {
+          [_tableView reloadData];
         }
       }
     } else {
-      [self invalidateView];
+      [self refresh];
     }
   }
 }
@@ -310,6 +460,7 @@ static const CGFloat kBannerViewHeight = 22;
       : TTSTYLEVAR(tablePlainBackgroundColor);
     if (backgroundColor) {
       _tableView.backgroundColor = backgroundColor;
+      self.view.backgroundColor = backgroundColor;
     }
     [self.view addSubview:_tableView];
   }
@@ -332,7 +483,7 @@ static const CGFloat kBannerViewHeight = 22;
 }
 
 - (void)setTableBannerView:(UIView*)tableBannerView animated:(BOOL)animated {
-  TT_RELEASE_TIMER(_bannerTimer);
+  TT_INVALIDATE_TIMER(_bannerTimer);
   if (tableBannerView != _tableBannerView) {
     if (_tableBannerView) {
       if (animated) {
@@ -348,7 +499,7 @@ static const CGFloat kBannerViewHeight = 22;
     if (_tableBannerView) {
       _tableBannerView.frame = [self rectForBannerView];
       _tableBannerView.userInteractionEnabled = NO;
-      [self addSubviewOverTableView:_tableBannerView];
+      [self addToOverlayView:_tableBannerView];
 
       if (animated) {
         _tableBannerView.top += kBannerViewHeight;
@@ -360,10 +511,6 @@ static const CGFloat kBannerViewHeight = 22;
       }
     }
   }
-}
-
-- (void)setTableOverlayView:(UIView*)tableOverlayView {
-  [self setTableOverlayView:tableOverlayView animated:YES];
 }
 
 - (void)setTableOverlayView:(UIView*)tableOverlayView animated:(BOOL)animated {
@@ -381,10 +528,11 @@ static const CGFloat kBannerViewHeight = 22;
 
     if (_tableOverlayView) {
       _tableOverlayView.frame = [self rectForOverlayView];
-      [self addSubviewOverTableView:_tableOverlayView];
+      [self addToOverlayView:_tableOverlayView];
     }
 
-    _tableView.scrollEnabled = !_tableOverlayView;
+    // XXXjoe There seem to be cases where this gets left disable - must investigate
+    //_tableView.scrollEnabled = !_tableOverlayView;
   }
 }
 
@@ -407,56 +555,58 @@ static const CGFloat kBannerViewHeight = 22;
   }
 }
 
+- (void)setLoadingView:(UIView*)view {
+  if (view != _loadingView) {
+    if (_loadingView) {
+      [_loadingView removeFromSuperview];
+      TT_RELEASE_SAFELY(_loadingView);
+    }
+    _loadingView = [view retain];
+    if (_loadingView) {
+      [self addToOverlayView:_loadingView];
+    } else {
+      [self resetOverlayView];
+    }
+  }
+}
+
+- (void)setErrorView:(UIView*)view {
+  if (view != _errorView) {
+    if (_errorView) {
+      [_errorView removeFromSuperview];
+      TT_RELEASE_SAFELY(_errorView);
+    }
+    _errorView = [view retain];
+    
+    if (_errorView) {
+      [self addToOverlayView:_errorView];
+    } else {
+      [self resetOverlayView];
+    }
+  }
+}
+
+- (void)setEmptyView:(UIView*)view {
+  if (view != _emptyView) {
+    if (_emptyView) {
+      [_emptyView removeFromSuperview];
+      TT_RELEASE_SAFELY(_emptyView);
+    }
+    _emptyView = [view retain];
+    if (_emptyView) {
+      [self addToOverlayView:_emptyView];
+    } else {
+      [self resetOverlayView];
+    }
+  }
+}
+
 - (id<UITableViewDelegate>)createDelegate {
   if (_variableHeightRows) {
     return [[[TTTableViewVarHeightDelegate alloc] initWithController:self] autorelease];
   } else {
     return [[[TTTableViewDelegate alloc] initWithController:self] autorelease];
   }
-}
-
-- (void)showLoadingView {
-  NSString* title = [_dataSource titleForLoading:NO];
-  if (title.length) {
-    TTActivityLabel* label = [[[TTActivityLabel alloc] initWithStyle:TTActivityLabelStyleWhiteBox]
-                                autorelease];
-    label.text = title;
-    label.backgroundColor = _tableView.backgroundColor;
-    label.centeredToScreen = NO;
-    self.tableOverlayView = label;
-  }
-}
-
-- (void)showReloadingView {
-  NSString* title = [_dataSource titleForLoading:YES];
-  if (title.length) {
-    TTActivityLabel* label = [[[TTActivityLabel alloc] initWithStyle:TTActivityLabelStyleBlackBox]
-                                autorelease];
-    label.text = title;
-    label.font = TTSTYLEVAR(tableBannerFont);
-    label.centeredToScreen = NO;
-    self.tableBannerView = label;
-  }
-}
-
-- (void)showEmptyView {
-  NSString* title = [_dataSource titleForEmpty];
-  NSString* subtitle = [_dataSource subtitleForEmpty];
-  UIImage* image = [_dataSource imageForEmpty];
-  self.tableOverlayView = [[[TTErrorView alloc] initWithTitle:title
-                                                subtitle:subtitle
-                                                image:image] autorelease];
-  self.tableOverlayView.backgroundColor = _tableView.backgroundColor;
-}
-
-- (void)showErrorView {
-  NSString* title = [_dataSource titleForError:_modelError];
-  NSString* subtitle = [_dataSource subtitleForError:_modelError];
-  UIImage* image = [_dataSource imageForError:_modelError];
-  self.tableOverlayView = [[[TTErrorView alloc] initWithTitle:title
-                                                subtitle:subtitle
-                                                image:image] autorelease];
-  self.tableOverlayView.backgroundColor = _tableView.backgroundColor;
 }
 
 - (void)showMenu:(UIView*)view forCell:(UITableViewCell*)cell animated:(BOOL)animated {
@@ -513,6 +663,12 @@ static const CGFloat kBannerViewHeight = 22;
 }
 
 - (void)didSelectObject:(id)object atIndexPath:(NSIndexPath*)indexPath {
+  if ([object respondsToSelector:@selector(URLValue)]) {
+    NSString* URL = [object URLValue];
+    if (URL) {
+      TTOpenURL(URL);
+    }
+  }
 }
 
 - (BOOL)shouldOpenURL:(NSString*)URL {
@@ -527,17 +683,7 @@ static const CGFloat kBannerViewHeight = 22;
 }
 
 - (CGRect)rectForOverlayView {
-  CGRect frame = [_tableView frameWithKeyboardSubtracted];
-  
-  if (_tableView.tableHeaderView) {
-    CGRect headerRect = _tableView.tableHeaderView.frame;
-    CGFloat diff = (headerRect.origin.y + headerRect.size.height) - _tableView.contentOffset.y;
-    if (diff >= 0) {
-      frame.origin.y += diff;
-      frame.size.height -= diff;
-    }
-  }
-  return frame;
+  return [_tableView frameWithKeyboardSubtracted];
 }
 
 - (CGRect)rectForBannerView {

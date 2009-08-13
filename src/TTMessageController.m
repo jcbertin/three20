@@ -231,9 +231,30 @@
   _scrollView.contentSize = CGSizeMake(_scrollView.width, y);
 }
 
-- (void)updateSendCommand {
-  BOOL compliant = YES;
+- (BOOL)hasEnteredText {
+  for (int i = 0; i < _fields.count; ++i) {
+    TTMessageField* field = [_fields objectAtIndex:i];
+    if (field.required) {
+      if ([field isKindOfClass:[TTMessageRecipientField class]]) {
+        TTPickerTextField* textField = [_fieldViews objectAtIndex:i];
+        if (textField.cells.count) {
+          return YES;
+        }
+      } else if ([field isKindOfClass:[TTMessageTextField class]]) {
+        UITextField* textField = [_fieldViews objectAtIndex:i];
+        if (!textField.text.isEmptyOrWhitespace) {
+          return YES;
+        }
+      }
+    }
+  }
   
+  return _textEditor.text.length;
+}
+
+- (BOOL)hasRequiredText {
+  BOOL compliant = YES;
+
   for (int i = 0; i < _fields.count; ++i) {
     TTMessageField* field = [_fields objectAtIndex:i];
     if (field.required) {
@@ -244,14 +265,18 @@
         }
       } else if ([field isKindOfClass:[TTMessageTextField class]]) {
         UITextField* textField = [_fieldViews objectAtIndex:i];
-        if (!textField.text.isEmptyOrWhitespace) {
+        if (textField.text.isEmptyOrWhitespace) {
           compliant = NO;
         }
       }
     }
   }
+  
+  return compliant && _textEditor.text.length;
+}
 
-  self.navigationItem.rightBarButtonItem.enabled = compliant && _textEditor.text.length;
+- (void)updateSendCommand {
+  self.navigationItem.rightBarButtonItem.enabled = [self hasRequiredText];
 }
 
 - (UITextField*)subjectField {
@@ -405,12 +430,14 @@
     }
     [[self viewForFieldAtIndex:0] becomeFirstResponder];
   }
+  
+  [self updateSendCommand];
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // UTViewController (TTCategory)
 
-- (void)persistView:(NSMutableDictionary*)state {
+- (BOOL)persistView:(NSMutableDictionary*)state {
   NSMutableArray* fields = [NSMutableArray array];
   for (NSInteger i = 0; i < _fields.count; ++i) {
     TTMessageField* field = [_fields objectAtIndex:i];
@@ -434,9 +461,13 @@
   
   NSInteger firstResponder = [self fieldIndexOfFirstResponder];
   [state setObject:[NSNumber numberWithInt:firstResponder] forKey:@"firstResponder"];
+  [state setObject:[NSNumber numberWithBool:YES] forKey:@"__important__"];
+  return [super persistView:state];
 }
 
 - (void)restoreView:(NSDictionary*)state {
+  self.view;
+  TT_RELEASE_SAFELY(_initialRecipients);
   NSMutableArray* fields = [state objectForKey:@"fields"];
   for (NSInteger i = 0; i < fields.count; ++i) {
     TTMessageField* field = [_fields objectAtIndex:i];
@@ -663,9 +694,8 @@
   bodyField.text = _textEditor.text;
   [fields addObject:bodyField];
   
-  self.navigationItem.rightBarButtonItem.enabled = NO;
   [self showActivityView:YES];
-
+  
   [self messageWillSend:fields];
 
   if ([_delegate respondsToSelector:@selector(composeController:didSendFields:)]) {
@@ -689,7 +719,7 @@
 
 - (void)confirmCancellation {
   UIAlertView* cancelAlertView = [[[UIAlertView alloc] initWithTitle:
-    TTLocalizedString(@"Are you sure?", @"")
+    TTLocalizedString(@"Cancel", @"")
     message:TTLocalizedString(@"Are you sure you want to cancel?", @"")
     delegate:self
     cancelButtonTitle:TTLocalizedString(@"Yes", @"")
@@ -698,13 +728,13 @@
 }
 
 - (void)showActivityView:(BOOL)show {
+  self.navigationItem.rightBarButtonItem.enabled = !show;
   if (show) {
     if (!_activityView) {
       CGRect frame = CGRectMake(0, 0, self.view.width, _scrollView.height);
       _activityView = [[TTActivityLabel alloc] initWithFrame:frame
                                                style:TTActivityLabelStyleWhiteBox];
       _activityView.text = [self titleForSending];
-      _activityView.centeredToScreen = NO;
       [self.view addSubview:_activityView];
     }
   } else {
@@ -718,7 +748,7 @@
 }
 
 - (BOOL)messageShouldCancel {
-  return !_textEditor.text.length || !_isModified;
+  return ![self hasEnteredText] || !_isModified;
 }
 
 - (void)messageWillShowRecipientPicker {

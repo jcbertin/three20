@@ -9,8 +9,11 @@
   NSError* _modelError;
 
   struct {
+    unsigned int isModelDidRefreshInvalid:1;
     unsigned int isModelWillLoadInvalid:1;
     unsigned int isModelDidLoadInvalid:1;
+    unsigned int isModelDidLoadFirstTimeInvalid:1;
+    unsigned int isModelDidShowFirstTimeInvalid:1;
     unsigned int isViewInvalid:1;
     unsigned int isViewSuspended:1;
     unsigned int isUpdatingView:1;
@@ -35,6 +38,11 @@
  * Creates the model that the controller manages.
  */
 - (void)createModel;
+
+/**
+ * Releases the current model and forces the creation of a new model.
+ */
+- (void)invalidateModel;
 
 /**
  * Indicates whether the model has been created.
@@ -109,9 +117,17 @@
 - (void)invalidateView;
 
 /** 
- * Forces the model and view to be created, loaded, and displayed, if they weren't already.
+ * Immediately creates, loads, and displays the model (if it was not already).
  */
-- (void)validateView;
+- (void)updateView;
+
+/**
+ * Called when the model is refreshed.
+ *
+ * Subclasses should override this function update parts of the view that may need to changed
+ * when there is a new model, or something about the existing model changes. 
+ */
+- (void)didRefreshModel;
 
 /**
  * Called before the model is asked to load itself.
@@ -130,10 +146,13 @@
  * This is not called until after the view has loaded.  If your model finishes loading before
  * the view is loaded, this will still be called, but not until after the view is loaded.
  *
+ * If you refresh a model which is already loaded, this will be called, but the firstTime
+ * argument will be false.
+ *
  * The default implementation of this method does nothing. Subclasses may override this method
  * to take an appropriate action.
  */
-- (void)didLoadModel;
+- (void)didLoadModel:(BOOL)firstTime;
 
 /**
  * Called just after a model has been loaded and displayed.
@@ -141,15 +160,7 @@
  * The default implementation of this method does nothing. Subclasses may override this method
  * to take an appropriate action.
  */
-- (void)didShowModel;
-
-/**
- * Shows views to represent the model loading.
- *
- * The default implementation of this method does nothing. Subclasses may override this method
- * to take an appropriate action.
- */
-- (void)showLoading:(BOOL)show;
+- (void)didShowModel:(BOOL)firstTime;
 
 /**
  * Shows views to represent the loaded model's content.
@@ -158,6 +169,14 @@
  * to take an appropriate action.
  */
 - (void)showModel:(BOOL)show;
+
+/**
+ * Shows views to represent the model loading.
+ *
+ * The default implementation of this method does nothing. Subclasses may override this method
+ * to take an appropriate action.
+ */
+- (void)showLoading:(BOOL)show;
 
 /**
  * Shows views to represent an empty model. 

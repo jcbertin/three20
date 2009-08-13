@@ -37,6 +37,11 @@ BOOL TTIsEmptyString(id object) {
   return [object isKindOfClass:[NSString class]] && ![(NSString*)object length];
 }
 
+BOOL TTIsKeyboardVisible() {
+  UIWindow* window = [UIApplication sharedApplication].keyWindow;
+  return !![window performSelector:@selector(firstResponder)];
+}
+
 UIInterfaceOrientation TTDeviceOrientation() {
   UIInterfaceOrientation orient = [UIDevice currentDevice].orientation;
   if (!orient) {
@@ -75,15 +80,26 @@ CGRect TTToolbarNavigationFrame() {
   return CGRectMake(0, 0, frame.size.width, frame.size.height - TT_ROW_HEIGHT*2);
 }
 
+CGFloat TTStatusHeight() {
+  return [UIScreen mainScreen].applicationFrame.origin.y;
+}
+
+CGFloat TTBarsHeight() {
+  return [UIScreen mainScreen].applicationFrame.origin.y + TT_ROW_HEIGHT;
+}
+
 CGRect TTRectContract(CGRect rect, CGFloat dx, CGFloat dy) {
   return CGRectMake(rect.origin.x, rect.origin.y, rect.size.width - dx, rect.size.height - dy);
+}
+
+CGRect TTRectShift(CGRect rect, CGFloat dx, CGFloat dy) {
+  return CGRectOffset(TTRectContract(rect, dx, dy), dx, dy);
 }
 
 CGRect TTRectInset(CGRect rect, UIEdgeInsets insets) {
   return CGRectMake(rect.origin.x + insets.left, rect.origin.y + insets.top,
                     rect.size.width - (insets.left + insets.right),
                     rect.size.height - (insets.top + insets.bottom));
-                    
 }
 
 void TTNetworkRequestStarted() {
@@ -96,6 +112,22 @@ void TTNetworkRequestStopped() {
   if (--gNetworkTaskCount == 0) {
     [UIApplication sharedApplication].networkActivityIndicatorVisible = NO;
   }
+}
+
+void TTAlert(NSString* message) {
+  UIAlertView* alert = [[[UIAlertView alloc] initWithTitle:TTLocalizedString(@"Alert", @"")
+                                             message:message delegate:nil
+                                             cancelButtonTitle:TTLocalizedString(@"OK", @"")
+                                             otherButtonTitles:nil] autorelease];
+  [alert show];
+}
+
+void TTAlertError(NSString* message) {
+  UIAlertView* alert = [[[UIAlertView alloc] initWithTitle:TTLocalizedString(@"Alert", @"")
+                                              message:message delegate:nil
+                                              cancelButtonTitle:TTLocalizedString(@"OK", @"")
+                                              otherButtonTitles:nil] autorelease];
+  [alert show];
 }
 
 float TTOSVersion() {
@@ -140,6 +172,30 @@ NSString* TTLocalizedString(NSString* key, NSString* comment) {
   return [bundle localizedStringForKey:key value:key table:nil];
 }
 
+NSString* TTFormatInteger(NSInteger num) {
+  NSNumber* number = [NSNumber numberWithInt:num];
+  NSNumberFormatter* formatter = [[NSNumberFormatter alloc] init];
+  [formatter setNumberStyle:kCFNumberFormatterDecimalStyle];
+  [formatter setGroupingSeparator:@","];
+  NSString* formatted = [formatter stringForObjectValue:number];
+  [formatter release];
+  return formatted;
+}
+
+NSString* TTDescriptionForError(NSError* error) {
+  TTLOG(@"ERROR %@", error);
+  if ([error.domain isEqualToString:NSURLErrorDomain]) {
+    if (error.code == NSURLErrorTimedOut) {
+      return TTLocalizedString(@"Connection Timed Out", @"");
+    } else if (error.code == NSURLErrorNotConnectedToInternet) {
+      return TTLocalizedString(@"No Internet Connection", @"");
+    } else {
+      return TTLocalizedString(@"Connection Error", @"");
+    }
+  }
+  return TTLocalizedString(@"Error", @"");
+}
+
 BOOL TTIsBundleURL(NSString* URL) {
   if (URL.length >= 9) {
     return [URL rangeOfString:@"bundle://" options:0 range:NSMakeRange(0,9)].location == 0;
@@ -170,7 +226,7 @@ NSString* TTPathForDocumentsResource(NSString* relativePath) {
   return [documentsPath stringByAppendingPathComponent:relativePath];
 }
 
-void TTSwizzle(Class cls, SEL originalSel, SEL newSel) {
+void TTSwapMethods(Class cls, SEL originalSel, SEL newSel) {
   Method originalMethod = class_getInstanceMethod(cls, originalSel);
   Method newMethod = class_getInstanceMethod(cls, newSel);
   method_exchangeImplementations(originalMethod, newMethod);

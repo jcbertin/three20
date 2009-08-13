@@ -9,7 +9,7 @@
 #import "Three20/UIImageAdditions.h"
 #import "Three20/UIViewControllerAdditions.h"
 #import "Three20/UINavigationControllerAdditions.h"
-#import "Three20/UITabBArControllerAdditions.h"
+#import "Three20/UITabBarControllerAdditions.h"
 #import "Three20/UIViewAdditions.h"
 #import "Three20/UITableViewAdditions.h"
 #import "Three20/UIWebViewAdditions.h"
@@ -53,10 +53,8 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Dimensions of common iPhone OS Views
 
-#define TT_STATUS_HEIGHT 20
 #define TT_ROW_HEIGHT 44
 #define TT_KEYBOARD_HEIGHT 216
-#define TT_CHROME_HEIGHT (TT_STATUS_HEIGHT + TT_ROW_HEIGHT)
 #define TT_ROUNDED -1
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -113,6 +111,16 @@ typedef enum {
 #define TT_DEFAULT_CACHE_EXPIRATION_AGE (60*60*24*7) // 1 week
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
+// Time
+
+#define TT_MINUTE 60
+#define TT_HOUR (60*TT_MINUTE)
+#define TT_DAY (24*TT_HOUR)
+#define TT_WEEK (7*TT_DAY)
+#define TT_MONTH (30.5*TT_DAY)
+#define TT_YEAR (365*TT_DAY)
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
 // Animation
 
 /**
@@ -127,8 +135,10 @@ typedef enum {
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 #define TT_RELEASE_SAFELY(__POINTER) { [__POINTER release]; __POINTER = nil; }
+#define TT_AUTORELEASE_SAFELY(__POINTER) { [__POINTER autorelease]; __POINTER = nil; }
+#define TT_INVALIDATE_TIMER(__TIMER) { [__TIMER invalidate]; __TIMER = nil; }
 
-#define TT_RELEASE_TIMER(__TIMER) { [__TIMER invalidate]; __TIMER = nil; }
+///////////////////////////////////////////////////////////////////////////////////////////////////
 
 /**
  * Creates a mutable array which does not retain references to the objects it contains.
@@ -154,6 +164,12 @@ BOOL TTIsEmptyArray(id object);
  * Tests if an object is a string which is empty.
  */
 BOOL TTIsEmptyString(id object);
+
+/**
+ * Tests if the keyboard is visible.
+ */
+BOOL TTIsKeyboardVisible();
+
 /**
  * Gets the current device orientation.
  */
@@ -185,9 +201,24 @@ CGRect TTKeyboardNavigationFrame();
 CGRect TTToolbarNavigationFrame();
 
 /**
+ * The height of the area containing the status bar and possibly the in-call status bar.
+ */
+CGFloat TTStatusHeight();
+
+/**
+ * The height of the area containing the status bar and navigation bar.
+ */
+CGFloat TTBarsHeight();
+
+/**
  * Returns a rectangle that is smaller or larger than the source rectangle.
  */
 CGRect TTRectContract(CGRect rect, CGFloat dx, CGFloat dy);
+
+/**
+ * Returns a rectangle whose edges have been moved a distance and shortened by that distance.
+ */
+CGRect TTRectShift(CGRect rect, CGFloat dx, CGFloat dy);
 
 /**
  * Returns a rectangle whose edges have been added to the insets.
@@ -207,6 +238,12 @@ void TTNetworkRequestStarted();
  * The status bar activity indicator will be spinning while there are active requests.
  */
 void TTNetworkRequestStopped();
+
+/**
+ * A convenient way to show a UIAlertView with a message;
+ */
+void TTAlert(NSString* message);
+void TTAlertError(NSString* message);
 
 /**
  * Gets the current runtime version of iPhone OS.
@@ -230,6 +267,10 @@ NSLocale* TTCurrentLocale();
  */
 NSString* TTLocalizedString(NSString* key, NSString* comment);
 
+NSString* TTDescriptionForError(NSError* error);
+
+NSString* TTFormatInteger(NSInteger num);
+
 BOOL TTIsBundleURL(NSString* URL);
 
 BOOL TTIsDocumentsURL(NSString* URL);
@@ -238,4 +279,4 @@ NSString* TTPathForBundleResource(NSString* relativePath);
 
 NSString* TTPathForDocumentsResource(NSString* relativePath);
 
-void TTSwizzle(Class cls, SEL originalSel, SEL newSel);
+void TTSwapMethods(Class cls, SEL originalSel, SEL newSel);

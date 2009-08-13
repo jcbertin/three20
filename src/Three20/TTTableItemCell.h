@@ -1,7 +1,7 @@
 #import "Three20/TTTableViewCell.h"
 
 @class TTTableLinkedItem, TTTableActivityItem, TTTableErrorItem, TTTableControlItem,
-       TTTableViewItem, TTImageView, TTErrorView, TTActivityLabel, TTStyledTextLabel;
+       TTTableViewItem, TTImageView, TTErrorView, TTActivityLabel, TTStyledTextLabel, TTStyledText;
 
 @interface TTTableLinkedItemCell : TTTableViewCell {
   TTTableLinkedItem* _item;
@@ -51,7 +51,7 @@
 
 @end
 
-@interface TTTableMoreButtonCell : TTTableSubtextItemCell {
+@interface TTTableMoreButtonCell : TTTableSubtitleItemCell {
   UIActivityIndicatorView* _activityIndicatorView;
   BOOL _animating;
 }
@@ -72,6 +72,16 @@
 @interface TTStyledTextTableItemCell : TTTableLinkedItemCell {
   TTStyledTextLabel* _label;
 }
+
+@property(nonatomic,readonly) TTStyledTextLabel* label;
+
+@end
+
+@interface TTStyledTextTableCell : TTTableViewCell {
+  TTStyledTextLabel* _label;
+}
+
+@property(nonatomic,readonly) TTStyledTextLabel* label;
 
 @end
 

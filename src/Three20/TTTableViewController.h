@@ -7,6 +7,9 @@
   UITableView* _tableView;
   UIView* _tableBannerView;
   UIView* _tableOverlayView;
+  UIView* _loadingView;
+  UIView* _errorView;
+  UIView* _emptyView;
   UIView* _menuView;
   UITableViewCell* _menuCell;
   id<TTTableViewDataSource> _dataSource;
@@ -27,6 +30,10 @@
  * A view that is displayed over the table view.
  */
 @property(nonatomic,retain) UIView* tableOverlayView;
+
+@property(nonatomic,retain) UIView* loadingView;
+@property(nonatomic,retain) UIView* errorView;
+@property(nonatomic,retain) UIView* emptyView;
 
 /** 
  * The data source used to populate the table view.
@@ -59,34 +66,9 @@
 - (id<UITableViewDelegate>)createDelegate;
 
 /**
- * Shows a view to represent the status of the model loading.
- */
-- (void)showLoadingView;
-
-/**
- * Shows a view to represent the status of the model reloading.
- */
-- (void)showReloadingView;
-
-/**
- * Creates and displays an view to represent a lack of content.
- */
-- (void)showEmptyView;
-
-/**
- * Creates and displays an view to represent a model error.
- */
-- (void)showErrorView;
-
-/**
  * Sets the view that is displayed at the bottom of the table view with an optional animation.
  */
 - (void)setTableBannerView:(UIView*)tableBannerView animated:(BOOL)animated;
-
-/**
- * Sets the view that is displayed over the table view with an optional animation.
- */
-- (void)setTableOverlayView:(UIView*)tableOverlayView animated:(BOOL)animated;
 
 /**
  * Shows a menu over a table cell.
@@ -100,6 +82,9 @@
 
 /**
  * Tells the controller that the user selected an object in the table.
+ *
+ * By default, the object's URLValue will be opened in TTNavigator, if it has one. If you don't
+ * want this to be happen, be sure to override this method and be sure not to call super.
  */
 - (void)didSelectObject:(id)object atIndexPath:(NSIndexPath*)indexPath;
 
@@ -119,12 +104,12 @@
 - (void)didEndDragging;
 
 /**
- *
+ * The rectangle where the overlay view should appear.
  */
 - (CGRect)rectForOverlayView;
 
 /**
- *
+ * The rectangle where the banner view should appear.
  */
 - (CGRect)rectForBannerView;
 

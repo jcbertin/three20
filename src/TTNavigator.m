@@ -25,8 +25,10 @@
 @implementation TTNavigator
 
 @synthesize delegate = _delegate, URLMap = _URLMap, window = _window,
-            rootViewController = _rootViewController, persistenceMode = _persistenceMode,
-            supportsShakeToReload = _supportsShakeToReload, opensExternalURLs = _opensExternalURLs;
+            rootViewController = _rootViewController,
+            persistenceExpirationAge = _persistenceExpirationAge,
+            persistenceMode = _persistenceMode, supportsShakeToReload = _supportsShakeToReload,
+            opensExternalURLs = _opensExternalURLs;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // class public
@@ -86,24 +88,11 @@
   }
 }
 
-- (void)ensureWindow {
-  if (!_window) {
-    UIWindow* keyWindow = [UIApplication sharedApplication].keyWindow;
-    if (keyWindow) {
-      _window = [keyWindow retain];
-    } else {
-      _window = [[TTNavigatorWindow alloc] initWithFrame:TTScreenBounds()];
-      [_window makeKeyAndVisible];
-    }
-  }
-  [_window addSubview:_rootViewController.view];
-}
-
 - (void)setRootViewController:(UIViewController*)controller {
   if (controller != _rootViewController) {
     [_rootViewController release];
     _rootViewController = [controller retain];
-    [self ensureWindow];
+    [self.window addSubview:_rootViewController.view];
   }
 }
 
@@ -134,7 +123,7 @@
         parent:(UIViewController*)parentController animated:(BOOL)animated {
   parentController.popupViewController = controller;
   controller.superController = parentController;
-  [controller showInViewController:parentController animated:animated];
+  [controller showInView:parentController.view animated:animated];
 }
 
 - (void)presentModalController:(UIViewController*)controller
@@ -150,7 +139,7 @@
   }
 }
 
-- (void)presentController:(UIViewController*)controller parent:(UIViewController*)parentController
+- (BOOL)presentController:(UIViewController*)controller parent:(UIViewController*)parentController
         mode:(TTNavigationMode)mode animated:(BOOL)animated transition:(NSInteger)transition {
   if (!_rootViewController) {
     [self setRootViewController:controller];
@@ -166,6 +155,7 @@
           superController = nextSuper;
         }
       }
+      return NO;
     } else if (parentController) {
       if ([controller isKindOfClass:[TTPopupViewController class]]) {
         TTPopupViewController* popupViewController  = (TTPopupViewController*)controller;
@@ -178,10 +168,11 @@
       }
     }
   }
+  return YES;
 }
 
-- (void)presentController:(UIViewController*)controller parent:(NSString*)parentURL
-        withPattern:(TTURLPattern*)pattern animated:(BOOL)animated
+- (BOOL)presentController:(UIViewController*)controller parent:(NSString*)parentURL
+        withPattern:(TTURLNavigatorPattern*)pattern animated:(BOOL)animated
         transition:(NSInteger)transition {
   if (controller) {
     UIViewController* topViewController = self.topViewController;
@@ -190,22 +181,21 @@
                                                  parent:parentURL ? parentURL : pattern.parentURL];
       if (parentController && parentController != topViewController) {
         [self presentController:parentController parent:nil mode:TTNavigationModeNone
-              animated:NO transition:0];
+                     animated:NO transition:0];
       }
-      [self presentController:controller parent:parentController mode:pattern.navigationMode
-            animated:animated transition:transition];
+      return [self presentController:controller parent:parentController mode:pattern.navigationMode
+                   animated:animated transition:transition];
     }
   }
+  return NO;
 }
 
 - (UIViewController*)openURL:(NSString*)URL parent:(NSString*)parentURL query:(NSDictionary*)query
                      state:(NSDictionary*)state animated:(BOOL)animated
-                     transition:(UIViewAnimationTransition)transition {
+                     transition:(UIViewAnimationTransition)transition withDelay:(BOOL)withDelay {
   if (!URL) {
     return nil;
   }
-  
-  TTLOG(@"OPENING URL %@", URL);
   
   NSURL* theURL = [NSURL URLWithString:URL];
   if ([_URLMap isAppURL:theURL]) {
@@ -213,8 +203,12 @@
     return nil;
   }
   
-  if (theURL.fragment && !theURL.scheme) {
-    URL = [self.URL stringByAppendingString:URL];
+  if (!theURL.scheme) {
+    if (theURL.fragment) {
+      URL = [self.URL stringByAppendingString:URL];
+    } else {
+      URL = [@"http://" stringByAppendingString:URL];
+    }
     theURL = [NSURL URLWithString:URL];
   }
   
@@ -223,8 +217,14 @@
       return nil;
     }
   }
+  
+  if (withDelay) {
+    [self beginDelay];
+  }
 
-  TTURLPattern* pattern = nil;
+  TTLOG(@"OPENING URL %@", URL);
+  
+  TTURLNavigatorPattern* pattern = nil;
   UIViewController* controller = [self viewControllerForURL:URL query:query pattern:&pattern];
   if (controller) {
     if (state) {
@@ -237,19 +237,24 @@
       }
     }
     
-    if ([_delegate respondsToSelector:@selector(navigator:wilOpenURL:inViewController:)]) {
+    if ([_delegate respondsToSelector:@selector(navigator:willOpenURL:inViewController:)]) {
       [_delegate navigator:self willOpenURL:theURL inViewController:controller];
     }
 
-    [self presentController:controller parent:parentURL withPattern:pattern
-          animated:animated transition:transition ? transition : pattern.transition];
+    BOOL wasNew = [self presentController:controller parent:parentURL withPattern:pattern
+                        animated:animated transition:transition ? transition : pattern.transition];
+  
+    if (withDelay && !wasNew) {
+      [self cancelDelay];
+    }
   } else if (_opensExternalURLs) {
-    if ([_delegate respondsToSelector:@selector(navigator:wilOpenURL:inViewController:)]) {
+    if ([_delegate respondsToSelector:@selector(navigator:willOpenURL:inViewController:)]) {
       [_delegate navigator:self willOpenURL:theURL inViewController:nil];
     }
 
     [[UIApplication sharedApplication] openURL:theURL];
   }
+
   return controller;
 }
 
@@ -262,13 +267,19 @@
     _URLMap = [[TTURLMap alloc] init];
     _window = nil;
     _rootViewController = nil;
+    _delayedControllers = nil;
     _persistenceMode = TTNavigatorPersistenceModeNone;
+    _persistenceExpirationAge = 0;
+    _delayCount = 0;
     _supportsShakeToReload = NO;
     _opensExternalURLs = NO;
     
-    // Swizzle a new dealloc for UIViewController so it notifies us when it's going away.
+    // SwapMethods a new dealloc for UIViewController so it notifies us when it's going away.
     // We need to remove dying controllers from our binding cache.
-    TTSwizzle([UIViewController class], @selector(dealloc), @selector(ttdealloc));
+    TTSwapMethods([UIViewController class], @selector(dealloc), @selector(ttdealloc));
+
+    TTSwapMethods([UINavigationController class], @selector(popViewControllerAnimated:),
+              @selector(popViewControllerAnimated2:));
     
     [[NSNotificationCenter defaultCenter] addObserver:self
                                           selector:@selector(applicationWillTerminateNotification:)
@@ -283,9 +294,10 @@
                                         name:UIApplicationWillTerminateNotification
                                         object:nil];
   _delegate = nil;
-  TT_RELEASE_SAFELY(_URLMap);
   TT_RELEASE_SAFELY(_window);
   TT_RELEASE_SAFELY(_rootViewController);
+  TT_RELEASE_SAFELY(_delayedControllers);
+  TT_RELEASE_SAFELY(_URLMap);
   [super dealloc];
 }
 
@@ -300,6 +312,19 @@
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // public
+
+- (UIWindow*)window {
+  if (!_window) {
+    UIWindow* keyWindow = [UIApplication sharedApplication].keyWindow;
+    if (keyWindow) {
+      _window = [keyWindow retain];
+    } else {
+      _window = [[TTNavigatorWindow alloc] initWithFrame:TTScreenBounds()];
+      [_window makeKeyAndVisible];
+    }
+  }
+  return _window;
+}
 
 - (UIViewController*)visibleViewController {
   UIViewController* controller = _rootViewController;
@@ -349,34 +374,42 @@
 
 - (UIViewController*)openURL:(NSString*)URL animated:(BOOL)animated {
   return [self openURL:URL parent:nil query:nil state:nil animated:animated
-               transition:UIViewAnimationTransitionNone];
+               transition:UIViewAnimationTransitionNone withDelay:NO];
 }
 
 - (UIViewController*)openURL:(NSString*)URL animated:(BOOL)animated
                      transition:(UIViewAnimationTransition)transition {
-  return [self openURL:URL parent:nil query:nil state:nil animated:YES transition:transition];
+  return [self openURL:URL parent:nil query:nil state:nil animated:animated
+               transition:transition withDelay:NO];
 }
 
 - (UIViewController*)openURL:(NSString*)URL parent:(NSString*)parentURL animated:(BOOL)animated {
   return [self openURL:URL parent:parentURL query:nil state:nil animated:animated
-               transition:UIViewAnimationTransitionNone];
+               transition:UIViewAnimationTransitionNone withDelay:NO];
 }
 
 - (UIViewController*)openURL:(NSString*)URL query:(NSDictionary*)query animated:(BOOL)animated {
   return [self openURL:URL parent:nil query:query state:nil animated:animated
-               transition:UIViewAnimationTransitionNone];
+               transition:UIViewAnimationTransitionNone withDelay:NO];
 }
 
 - (UIViewController*)openURL:(NSString*)URL parent:(NSString*)parentURL query:(NSDictionary*)query
                      animated:(BOOL)animated {
   return [self openURL:URL parent:parentURL query:query state:nil animated:animated
-               transition:UIViewAnimationTransitionNone];
+               transition:UIViewAnimationTransitionNone withDelay:NO];
 }
 
 - (UIViewController*)openURL:(NSString*)URL parent:(NSString*)parentURL query:(NSDictionary*)query
                      animated:(BOOL)animated transition:(UIViewAnimationTransition)transition {
   return [self openURL:URL parent:parentURL query:query state:nil animated:animated
-               transition:UIViewAnimationTransitionNone];
+               transition:UIViewAnimationTransitionNone withDelay:NO];
+}
+
+- (UIViewController*)openURL:(NSString*)URL parent:(NSString*)parentURL query:(NSDictionary*)query
+                     animated:(BOOL)animated transition:(UIViewAnimationTransition)transition
+                     withDelay:(BOOL)withDelay {
+  return [self openURL:URL parent:parentURL query:query state:nil animated:animated
+               transition:UIViewAnimationTransitionNone withDelay:withDelay];
 }
 
 - (UIViewController*)openURLs:(NSString*)URL,... {
@@ -401,7 +434,7 @@
 }
 
 - (UIViewController*)viewControllerForURL:(NSString*)URL query:(NSDictionary*)query
-                     pattern:(TTURLPattern**)pattern {
+                     pattern:(TTURLNavigatorPattern**)pattern {
   NSRange fragmentRange = [URL rangeOfString:@"#" options:NSBackwardsSearch];
   if (fragmentRange.location != NSNotFound) {
     NSString* baseURL = [URL substringToIndex:fragmentRange.location];
@@ -415,11 +448,15 @@
       }
     } else {
       id object = [_URLMap objectForURL:baseURL query:nil pattern:pattern];
-      id result = [_URLMap dispatchURL:URL toTarget:object query:query];
-      if ([result isKindOfClass:[UIViewController class]]) {
-        return result;
+      if (object) {
+        id result = [_URLMap dispatchURL:URL toTarget:object query:query];
+        if ([result isKindOfClass:[UIViewController class]]) {
+          return result;
+        } else {
+          return object;
+        }
       } else {
-        return object;
+        return nil;
       }
     }
   }
@@ -427,10 +464,43 @@
   id object = [_URLMap objectForURL:URL query:query pattern:pattern];
   if (object) {
     UIViewController* controller = object;
-    controller.navigatorURL = URL;
+    controller.originalNavigatorURL = URL;
+    
+    if (_delayCount) {
+      if (!_delayedControllers) {
+        _delayedControllers = [[NSMutableArray alloc] initWithObjects:controller,nil];
+      } else {
+        [_delayedControllers addObject:controller];
+      }
+    }
+    
     return controller;
   } else {
     return nil;
+  }
+}
+
+- (BOOL)isDelayed {
+  return _delayCount > 0;
+}
+
+- (void)beginDelay {
+  ++_delayCount;
+}
+
+- (void)endDelay {
+  if (_delayCount && !--_delayCount) {
+    for (UIViewController* controller in _delayedControllers) {
+      [controller delayDidEnd];
+    }
+    
+    TT_RELEASE_SAFELY(_delayedControllers);
+  }
+}
+
+- (void)cancelDelay {
+  if (_delayCount && !--_delayCount) {
+    TT_RELEASE_SAFELY(_delayedControllers);
   }
 }
 
@@ -439,27 +509,68 @@
   [self persistController:_rootViewController path:path];
   TTLOG(@"DEBUG PERSIST %@", path);
   
+  // Check if any of the paths were "important", and therefore unable to expire
+  BOOL important = NO;
+  for (NSDictionary* state in path) {
+    if ([state objectForKey:@"__important__"]) {
+      important = YES;
+      break;
+    }
+  }
+  
   NSUserDefaults* defaults = [NSUserDefaults standardUserDefaults];
-  [defaults setObject:path forKey:@"TTNavigatorHistory"];
+  if (path.count) {
+    [defaults setObject:path forKey:@"TTNavigatorHistory"];
+    [defaults setObject:[NSDate date] forKey:@"TTNavigatorHistoryTime"];
+    [defaults setObject:[NSNumber numberWithInt:important] forKey:@"TTNavigatorHistoryImportant"];
+  } else {
+    [defaults removeObjectForKey:@"TTNavigatorHistory"];
+    [defaults removeObjectForKey:@"TTNavigatorHistoryTime"];
+    [defaults removeObjectForKey:@"TTNavigatorHistoryImportant"];
+  }
   [defaults synchronize];
 }
 
 - (UIViewController*)restoreViewControllers { 
   NSUserDefaults* defaults = [NSUserDefaults standardUserDefaults];
+  NSDate* timestamp = [defaults objectForKey:@"TTNavigatorHistoryTime"];
   NSArray* path = [defaults objectForKey:@"TTNavigatorHistory"];
-  TTLOG(@"DEBUG RESTORE %@", path);
+  BOOL important = [[defaults objectForKey:@"TTNavigatorHistoryImportant"] boolValue];
+  TTLOG(@"DEBUG RESTORE %@ FROM %@", path, [timestamp formatRelativeTime]);
   
+  BOOL expired = _persistenceExpirationAge
+                 && -timestamp.timeIntervalSinceNow > _persistenceExpirationAge;
+  if (expired && !important) {
+    return nil;
+  }
+
   UIViewController* controller = nil;
   BOOL passedContainer = NO;
   for (NSDictionary* state in path) {
     NSString* URL = [state objectForKey:@"__navigatorURL__"];
-    controller = [self openURL:URL parent:nil query:nil state:state animated:NO transition:0];
+    controller = [self openURL:URL parent:nil query:nil state:state animated:NO transition:0
+                      withDelay:NO];
+    
+    // Stop if we reach a model view controller whose model could not be synchronously loaded.
+    // That is because the controller after it may depend on the data it could not load, so
+    // we'd better not risk opening more controllers that may not be able to function.
+//    if ([controller isKindOfClass:[TTModelViewController class]]) {
+//      TTModelViewController* modelViewController = (TTModelViewController*)controller;
+//      if (!modelViewController.model.isLoaded) {
+//        break;
+//      }
+//    }
+
+    // Stop after one controller if we are in "persist top" mode
     if (_persistenceMode == TTNavigatorPersistenceModeTop && passedContainer) {
       break;
     }
+    
     passedContainer = [controller canContainControllers];
   }
 
+  [self.window makeKeyAndVisible];
+  
   return controller;
 }
 
@@ -469,9 +580,9 @@
     // Let the controller persists its own arbitrary state
     NSMutableDictionary* state = [NSMutableDictionary dictionaryWithObject:URL  
                                                       forKey:@"__navigatorURL__"];
-    [controller persistView:state];
-
-    [path addObject:state];
+    if ([controller persistView:state]) {
+      [path addObject:state];
+    }
   }
   [controller persistNavigationPath:path];
 
@@ -479,13 +590,15 @@
       && controller.modalViewController.parentViewController == controller) {
     [self persistController:controller.modalViewController path:path];
   } else if (controller.popupViewController
-      && controller.popupViewController.superController == controller) {
+             && controller.popupViewController.superController == controller) {
     [self persistController:controller.popupViewController path:path];
   }
 }
 
 - (void)removeAllViewControllers {
-  // XXXjoe Implement me
+  [_rootViewController.view removeFromSuperview];
+  TT_RELEASE_SAFELY(_rootViewController);
+  [_URLMap removeAllObjects];
 }
 
 - (NSString*)pathForObject:(id)object {
@@ -518,6 +631,8 @@
 - (void)resetDefaults {
   NSUserDefaults* defaults = [NSUserDefaults standardUserDefaults];
   [defaults removeObjectForKey:@"TTNavigatorHistory"];
+  [defaults removeObjectForKey:@"TTNavigatorHistoryTime"];
+  [defaults removeObjectForKey:@"TTNavigatorHistoryImportant"];
   [defaults synchronize];
 }
 

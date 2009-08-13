@@ -1,11 +1,16 @@
 #import "Three20/TTModel.h"
 
-@protocol TTTableViewDataSource <UITableViewDataSource, UISearchDisplayDelegate>
+@protocol TTTableViewDataSource <UITableViewDataSource, TTModel, UISearchDisplayDelegate>
 
 /**
  * Optional method to return a model object to delegate the TTModel protocol to.
  */
 @property(nonatomic,retain) id<TTModel> model;
+
+/**
+ *
+ */
++ (NSArray*)lettersForSectionsWithSearch:(BOOL)search summary:(BOOL)summary;
 
 /**
  *
@@ -80,6 +85,12 @@
 /**
  *
  */
+- (NSIndexPath*)tableView:(UITableView*)tableView willUpdateObject:(id)object
+                atIndexPath:(NSIndexPath*)indexPath;
+
+/**
+ *
+ */
 - (NSIndexPath*)tableView:(UITableView*)tableView willInsertObject:(id)object
                 atIndexPath:(NSIndexPath*)indexPath;
 
@@ -102,4 +113,13 @@
   id<TTModel> _model;
 }
 
+@end
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+/**
+ * A datasource that is eternally loading.  Useful when you are in between data sources and
+ * want to show the impression of loading until your actual data source is available.
+ */
+@interface TTTableViewInterstialDataSource : TTTableViewDataSource <TTModel>
 @end

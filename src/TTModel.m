@@ -8,44 +8,18 @@
 
 @implementation TTModel
 
-@synthesize loadedTime = _loadedTime, cacheKey = _cacheKey;
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // NSObject
 
-- (id)initLocalModel {
-  if (self = [super init]) {
-    _delegates = nil;
-    _loadingRequest = nil;
-    _isLoadingMore = NO;
-    _loadedTime = [[NSDate date] retain];
-    _cacheKey = nil;
-  }
-  return self;
-}
-
-- (id)initRemoteModel {
-  if (self = [super init]) {
-    _delegates = nil;
-    _loadingRequest = nil;
-    _isLoadingMore = NO;
-    _loadedTime = nil;
-    _cacheKey = nil;
-  }
-  return self;
-}
-
 - (id)init {
-  return [self initRemoteModel];
+  if (self = [super init]) {
+    _delegates = nil;
+  }
+  return self;
 }
 
 - (void)dealloc {
-  [[TTURLRequestQueue mainQueue] cancelRequestsWithDelegate:self];
-  [_loadingRequest cancel];
-  TT_RELEASE_SAFELY(_loadingRequest);
   TT_RELEASE_SAFELY(_delegates);
-  TT_RELEASE_SAFELY(_loadedTime);
-  TT_RELEASE_SAFELY(_cacheKey);
   [super dealloc];
 }
 
@@ -59,9 +33,109 @@
   return _delegates;
 }
 
-- (NSDate*)loadedTime {
-  return _loadedTime;
+- (BOOL)isLoaded {
+  return YES;
 }
+
+- (BOOL)isLoading {
+  return NO;
+}
+
+- (BOOL)isLoadingMore {
+  return NO;
+}
+
+- (BOOL)isOutdated {
+  return NO;
+}
+
+- (void)load:(TTURLRequestCachePolicy)cachePolicy more:(BOOL)more {
+}
+
+- (void)cancel {
+}
+
+- (void)invalidate:(BOOL)erase {
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// public
+
+- (void)didStartLoad {
+  [_delegates perform:@selector(modelDidStartLoad:) withObject:self];
+}
+
+- (void)didFinishLoad {
+  [_delegates perform:@selector(modelDidFinishLoad:) withObject:self];
+}
+
+- (void)didFailLoadWithError:(NSError*)error {
+  [_delegates perform:@selector(model:didFailLoadWithError:) withObject:self
+    withObject:error];
+}
+
+- (void)didCancelLoad {
+  [_delegates perform:@selector(modelDidCancelLoad:) withObject:self];
+}
+
+- (void)beginUpdates {
+  [_delegates perform:@selector(modelDidBeginUpdates:) withObject:self];
+}
+
+- (void)endUpdates {
+  [_delegates perform:@selector(modelDidEndUpdates:) withObject:self];
+}
+
+- (void)didUpdateObject:(id)object atIndexPath:(NSIndexPath*)indexPath {
+  [_delegates perform:@selector(model:didUpdateObject:atIndexPath:) withObject:self
+              withObject:object withObject:indexPath];
+}
+
+- (void)didInsertObject:(id)object atIndexPath:(NSIndexPath*)indexPath {
+  [_delegates perform:@selector(model:didInsertObject:atIndexPath:) withObject:self
+              withObject:object withObject:indexPath];
+}
+
+- (void)didDeleteObject:(id)object atIndexPath:(NSIndexPath*)indexPath {
+  [_delegates perform:@selector(model:didDeleteObject:atIndexPath:) withObject:self
+              withObject:object withObject:indexPath];
+}
+
+- (void)didChange {
+  [_delegates perform:@selector(modelDidChange:) withObject:self];
+}
+@end
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+@implementation TTURLRequestModel
+
+@synthesize loadedTime = _loadedTime, cacheKey = _cacheKey, hasNoMore = _hasNoMore;
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// NSObject
+
+- (id)init {
+  if (self = [super init]) {
+    _loadingRequest = nil;
+    _isLoadingMore = NO;
+    _loadedTime = nil;
+    _cacheKey = nil;
+  }
+  return self;
+}
+
+- (void)dealloc {
+  [[TTURLRequestQueue mainQueue] cancelRequestsWithDelegate:self];
+  [_loadingRequest cancel];
+  TT_RELEASE_SAFELY(_loadingRequest);
+  TT_RELEASE_SAFELY(_loadedTime);
+  TT_RELEASE_SAFELY(_cacheKey);
+  [super dealloc];
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// TTModel
 
 - (BOOL)isLoaded {
   return !!_loadedTime;
@@ -72,11 +146,13 @@
 }
 
 - (BOOL)isLoadingMore {
-  return _loadingRequest && _isLoadingMore;
+  return _isLoadingMore;
 }
 
 - (BOOL)isOutdated {
-  if (!_cacheKey) {
+  if (!_cacheKey && _loadedTime) {
+    return YES;
+  } else if (!_cacheKey) {
     return NO;
   } else {
     NSDate* loadedTime = self.loadedTime;
@@ -88,7 +164,8 @@
   }
 }
 
-- (void)load:(TTURLRequestCachePolicy)cachePolicy more:(BOOL)more {
+- (void)cancel {
+  [_loadingRequest cancel];
 }
 
 - (void)invalidate:(BOOL)erase {
@@ -100,10 +177,6 @@
     }
     TT_RELEASE_SAFELY(_cacheKey);
   }
-}
-
-- (void)cancel {
-  [_loadingRequest cancel];
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -139,48 +212,10 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // public
 
-- (void)didStartLoad {
-  [_delegates perform:@selector(modelDidStartLoad:) withObject:self];
-}
-
-- (void)didFinishLoad {
-  [_delegates perform:@selector(modelDidFinishLoad:) withObject:self];
-}
-
-- (void)didFailLoadWithError:(NSError*)error {
-  [_delegates perform:@selector(model:didFailLoadWithError:) withObject:self
-    withObject:error];
-}
-
-- (void)didCancelLoad {
-  [_delegates perform:@selector(modelDidCancelLoad:) withObject:self];
-}
-
-- (void)beginUpdates {
-  [_delegates perform:@selector(modelDidBeginUpdates:) withObject:self];
-}
-
-- (void)endUpdates {
-  [_delegates perform:@selector(modelDidEndUpdates:) withObject:self];
-}
-
-- (void)didInsertObject:(id)object atIndexPath:(NSIndexPath*)indexPath {
-  [_delegates perform:@selector(model:didInsertObject:atIndexPath:) withObject:self
-              withObject:object withObject:indexPath];
-}
-
-- (void)didDeleteObject:(id)object atIndexPath:(NSIndexPath*)indexPath {
-  [_delegates perform:@selector(model:didDeleteObject:atIndexPath:) withObject:self
-              withObject:object withObject:indexPath];
-}
-
-- (void)didChange {
-  [_delegates perform:@selector(modelDidChange:) withObject:self];
-}
-
 - (void)reset {
   TT_RELEASE_SAFELY(_cacheKey);
   TT_RELEASE_SAFELY(_loadedTime);
 }
 
 @end
+

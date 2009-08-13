@@ -20,12 +20,8 @@ static const NSInteger kActivityLabelTag = 96;
 @implementation TTPhotoViewController
 
 @synthesize photoSource = _photoSource, centerPhoto = _centerPhoto,
-<<<<<<< HEAD:src/TTPhotoViewController.m
-  centerPhotoIndex = _centerPhotoIndex, defaultImage = _defaultImage,
+  centerPhotoIndex = _centerPhotoIndex, defaultImage = _defaultImage, captionStyle = _captionStyle,
   autoHideBars = _autoHideBars;
-=======
-  centerPhotoIndex = _centerPhotoIndex, defaultImage = _defaultImage, captionStyle = _captionStyle;
->>>>>>> joehewitt/master:src/TTPhotoViewController.m
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // private
@@ -331,12 +327,8 @@ static const NSInteger kActivityLabelTag = 96;
     _slideshowTimer = nil;
     _loadTimer = nil;
     _delayLoad = NO;
-<<<<<<< HEAD:src/TTPhotoViewController.m
     _hideBarsTimerRunning = NO;
     _autoHideBars = NO;
-    self.defaultImage = TTIMAGE(@"bundle://Three20.bundle/images/photoDefault.png");
-=======
->>>>>>> joehewitt/master:src/TTPhotoViewController.m
     
     self.navigationItem.backBarButtonItem = [[[UIBarButtonItem alloc] initWithTitle:
       TTLocalizedString(@"Photo", @"Title for back button that returns to photo browser")
@@ -430,11 +422,8 @@ static const NSInteger kActivityLabelTag = 96;
 - (void)viewWillDisappear:(BOOL)animated {
   [super viewWillDisappear:animated];
 
-<<<<<<< HEAD:src/TTPhotoViewController.m
   [self cancelHideBarsTimer];
-=======
   [_scrollView cancelTouches];
->>>>>>> joehewitt/master:src/TTPhotoViewController.m
   [self pauseAction];
   if (self.nextViewController) {
     [self showBars:YES animated:NO];

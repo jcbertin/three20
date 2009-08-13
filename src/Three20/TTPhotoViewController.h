@@ -53,18 +53,17 @@
 @property(nonatomic,retain) UIImage* defaultImage;
 
 /**
-<<<<<<< HEAD:src/Three20/TTPhotoViewController.h
  * Auto hide bars after delay without user interaction.
  */
 @property(nonatomic,assign) BOOL autoHideBars;
-=======
+
+/**
  * The style to use for the caption label.
  */
 @property(nonatomic,retain) TTStyle* captionStyle;
 
 - (id)initWithPhoto:(id<TTPhoto>)photo;
 - (id)initWithPhotoSource:(id<TTPhotoSource>)photoSource;
->>>>>>> joehewitt/master:src/Three20/TTPhotoViewController.h
 
 /**
  * Creates a photo view for a new page.

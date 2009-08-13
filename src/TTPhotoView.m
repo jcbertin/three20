@@ -120,12 +120,6 @@
   CGFloat height = self.orientationHeight;
   CGFloat cx = self.bounds.origin.x + width/2;
   CGFloat cy = self.bounds.origin.y + height/2;
-<<<<<<< HEAD:src/TTPhotoView.m
-
-  BOOL landscape = self.width == width;
-  CGFloat marginBottom = landscape ? TT_ROW_HEIGHT : 0;
-  
-=======
 
   UIDeviceOrientation orientation = TTDeviceOrientation();
   CGFloat marginRight = 0, marginLeft = 0, marginBottom = 0;
@@ -139,7 +133,6 @@
     marginRight = TTBarsHeight();
   }
 
->>>>>>> joehewitt/master:src/TTPhotoView.m
   // Since the photo view is constrained to the size of the image, but we want to position
   // the status views relative to the screen, offset by the difference
   CGFloat screenOffset = -floor(screenBounds.size.height/2 - height/2);
